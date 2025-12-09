@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+}
+
+@layer utilities {
+  .gradient-gemini {
+    background: linear-gradient(135deg, #9334EA 0%, #EA4335 100%);
+  }
+}
