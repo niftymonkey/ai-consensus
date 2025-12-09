@@ -3,13 +3,12 @@
 import { useEffect, useState } from "react";
 
 export function useColorTheme() {
-  const [colorTheme, setColorThemeState] = useState("claude");
+  const [colorTheme, setColorThemeState] = useState<string>("");
 
-  // Load and apply theme on mount
+  // Load theme on mount (blocking script already applied it)
   useEffect(() => {
     const stored = localStorage.getItem("color-theme") || "claude";
     setColorThemeState(stored);
-    applyColorTheme(stored);
   }, []);
 
   function applyColorTheme(theme: string) {
@@ -26,5 +25,5 @@ export function useColorTheme() {
     applyColorTheme(theme);
   }
 
-  return { colorTheme, setColorTheme };
+  return { colorTheme: colorTheme || "claude", setColorTheme };
 }
