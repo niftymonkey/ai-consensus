@@ -3,10 +3,17 @@
 import { signOut, useSession } from "next-auth/react";
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 export function UserMenu() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [isOpen, setIsOpen] = useState(false);
+
+  if (status === "loading") {
+    return (
+      <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse" />
+    );
+  }
 
   if (!session?.user) {
     return (
@@ -26,10 +33,12 @@ export function UserMenu() {
         className="flex items-center gap-2 focus:outline-none"
       >
         {session.user.image ? (
-          <img
+          <Image
             src={session.user.image}
             alt={session.user.name || "User"}
-            className="w-8 h-8 rounded-full border border-gray-200"
+            width={32}
+            height={32}
+            className="rounded-full border border-gray-200"
           />
         ) : (
           <div className="w-8 h-8 rounded-full bg-gradient-to-r from-claude to-gpt flex items-center justify-center text-white text-sm font-semibold">

@@ -1,4 +1,8 @@
-export default function Home() {
+import { auth } from "@/lib/auth";
+import Link from "next/link";
+
+export default async function Home() {
+  const session = await auth();
   return (
     <div className="container mx-auto px-4 py-12">
       <div className="max-w-4xl mx-auto text-center space-y-8">
@@ -58,20 +62,22 @@ export default function Home() {
             </ul>
           </div>
 
-          <div className="flex gap-4 justify-center">
-            <a
-              href="/api/auth/signin"
-              className="px-6 py-3 bg-gradient-to-r from-claude to-gpt text-white rounded-lg font-semibold hover:shadow-lg transition-shadow"
-            >
-              Sign In
-            </a>
-            <a
-              href="/settings"
-              className="px-6 py-3 bg-white border border-gray-300 rounded-lg font-semibold hover:shadow-md transition-shadow"
-            >
-              Settings
-            </a>
-          </div>
+          {session && (
+            <div className="flex gap-4 justify-center">
+              <Link
+                href="/chat"
+                className="px-6 py-3 bg-gradient-to-r from-claude to-gpt text-white rounded-lg font-semibold hover:shadow-lg transition-shadow"
+              >
+                Start Chatting
+              </Link>
+              <Link
+                href="/settings"
+                className="px-6 py-3 bg-white border border-gray-300 rounded-lg font-semibold hover:shadow-md transition-shadow"
+              >
+                Settings
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </div>

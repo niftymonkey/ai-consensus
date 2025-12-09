@@ -3,21 +3,23 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 import { UserMenu } from "@/components/auth/user-menu";
 import Link from "next/link";
+import { auth } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "AI Consensus - Multi-Model Collaboration",
   description: "Ask a question and watch Claude, GPT, and Gemini collaborate to reach consensus",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await auth();
   return (
     <html lang="en">
       <body className="antialiased">
-        <Providers>
+        <Providers session={session}>
           <div className="min-h-screen flex flex-col">
             <header className="border-b border-gray-200 bg-white">
               <div className="container mx-auto px-4 py-4 flex items-center justify-between">
