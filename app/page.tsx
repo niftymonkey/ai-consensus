@@ -1,4 +1,8 @@
-export default function Home() {
+import { auth } from "@/lib/auth";
+import Link from "next/link";
+
+export default async function Home() {
+  const session = await auth();
   return (
     <div className="container mx-auto px-4 py-12">
       <div className="max-w-4xl mx-auto text-center space-y-8">
@@ -21,7 +25,7 @@ export default function Home() {
             </div>
             <h3 className="font-semibold text-lg mb-2">Claude</h3>
             <p className="text-sm text-gray-600">
-              Anthropic's powerful AI model known for thoughtful, nuanced responses
+              Anthropic&apos;s powerful AI model known for thoughtful, nuanced responses
             </p>
           </div>
 
@@ -31,7 +35,7 @@ export default function Home() {
             </div>
             <h3 className="font-semibold text-lg mb-2">GPT-4</h3>
             <p className="text-sm text-gray-600">
-              OpenAI's flagship model with broad knowledge and strong reasoning
+              OpenAI&apos;s flagship model with broad knowledge and strong reasoning
             </p>
           </div>
 
@@ -41,7 +45,7 @@ export default function Home() {
             </div>
             <h3 className="font-semibold text-lg mb-2">Gemini</h3>
             <p className="text-sm text-gray-600">
-              Google's advanced AI with multimodal capabilities and fast responses
+              Google&apos;s advanced AI with multimodal capabilities and fast responses
             </p>
           </div>
         </div>
@@ -58,20 +62,22 @@ export default function Home() {
             </ul>
           </div>
 
-          <div className="flex gap-4 justify-center">
-            <a
-              href="/login"
-              className="px-6 py-3 bg-gradient-to-r from-claude to-gpt text-white rounded-lg font-semibold hover:shadow-lg transition-shadow"
-            >
-              Sign In (Coming Soon)
-            </a>
-            <a
-              href="/settings"
-              className="px-6 py-3 bg-white border border-gray-300 rounded-lg font-semibold hover:shadow-md transition-shadow"
-            >
-              Settings (Coming Soon)
-            </a>
-          </div>
+          {session && (
+            <div className="flex gap-4 justify-center">
+              <Link
+                href="/chat"
+                className="px-6 py-3 bg-gradient-to-r from-claude to-gpt text-white rounded-lg font-semibold hover:shadow-lg transition-shadow"
+              >
+                Start Chatting
+              </Link>
+              <Link
+                href="/settings"
+                className="px-6 py-3 bg-white border border-gray-300 rounded-lg font-semibold hover:shadow-md transition-shadow"
+              >
+                Settings
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </div>
