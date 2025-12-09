@@ -25,7 +25,7 @@ export default async function Home() {
             </div>
             <h3 className="font-semibold text-lg mb-2">Claude</h3>
             <p className="text-sm text-gray-600">
-              Anthropic's powerful AI model known for thoughtful, nuanced responses
+              Anthropic&apos;s powerful AI model known for thoughtful, nuanced responses
             </p>
           </div>
 
@@ -35,7 +35,7 @@ export default async function Home() {
             </div>
             <h3 className="font-semibold text-lg mb-2">GPT-4</h3>
             <p className="text-sm text-gray-600">
-              OpenAI's flagship model with broad knowledge and strong reasoning
+              OpenAI&apos;s flagship model with broad knowledge and strong reasoning
             </p>
           </div>
 
@@ -45,7 +45,7 @@ export default async function Home() {
             </div>
             <h3 className="font-semibold text-lg mb-2">Gemini</h3>
             <p className="text-sm text-gray-600">
-              Google's advanced AI with multimodal capabilities and fast responses
+              Google&apos;s advanced AI with multimodal capabilities and fast responses
             </p>
           </div>
         </div>
