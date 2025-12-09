@@ -1,6 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SettingsHeader } from "@/components/settings/settings-header";
+import { APIKeyInput } from "@/components/settings/api-key-input";
+import { SecurityNotice } from "@/components/settings/security-notice";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SettingsPage() {
   const [keys, setKeys] = useState({
@@ -20,7 +27,6 @@ export default function SettingsPage() {
     text: string;
   } | null>(null);
 
-  // Load existing keys on mount
   useEffect(() => {
     fetchKeys();
   }, []);
@@ -52,7 +58,6 @@ export default function SettingsPage() {
         return;
       }
 
-      // Save each key that was provided
       for (const [provider, apiKey] of keysToSave) {
         const response = await fetch("/api/keys", {
           method: "POST",
@@ -66,8 +71,6 @@ export default function SettingsPage() {
       }
 
       setMessage({ type: "success", text: "API keys saved successfully!" });
-
-      // Clear input fields and refresh masked keys
       setKeys({ anthropic: "", openai: "", google: "" });
       await fetchKeys();
     } catch (error) {
@@ -79,134 +82,80 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-12">
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold mb-2">Settings</h1>
-        <p className="text-gray-600 mb-8">Manage your API keys and preferences</p>
+    <div className="container py-12">
+      <div className="space-y-6">
+        <SettingsHeader />
 
-        <div className="bg-white rounded-lg shadow-lg p-8 space-y-8">
-          <div>
-            <h2 className="text-xl font-semibold mb-4">API Keys</h2>
-            <p className="text-sm text-gray-600 mb-6">
-              To use AI Consensus, you need to provide API keys for each model. Your keys are encrypted and stored securely using AES-256.
-            </p>
-
+        <Card>
+          <CardHeader>
+            <CardTitle>API Keys</CardTitle>
+            <CardDescription>
+              To use AI Consensus, you need to provide API keys for each model.
+              Your keys are encrypted and stored securely using AES-256.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
             {loading ? (
-              <div className="text-center py-8">
-                <div className="inline-block w-8 h-8 border-4 border-gray-300 border-t-claude rounded-full animate-spin"></div>
-                <p className="text-sm text-gray-500 mt-2">Loading your keys...</p>
+              <div className="space-y-4">
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-20 w-full" />
               </div>
             ) : (
-              <div className="space-y-6">
-                {/* Anthropic/Claude */}
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 rounded-full bg-claude"></div>
-                    <h3 className="font-semibold">Anthropic (Claude)</h3>
-                    {maskedKeys.anthropic && (
-                      <span className="ml-auto text-xs text-green-600 font-medium">
-                        Configured: {maskedKeys.anthropic}
-                      </span>
-                    )}
-                  </div>
-                  <input
-                    type="password"
-                    placeholder={maskedKeys.anthropic ? "Enter new key to update" : "sk-ant-..."}
-                    value={keys.anthropic}
-                    onChange={(e) => setKeys({ ...keys, anthropic: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-claude focus:border-transparent"
-                  />
-                  <p className="text-xs text-gray-500 mt-2">
-                    Get your API key from{" "}
-                    <a href="https://console.anthropic.com/" target="_blank" rel="noopener" className="text-claude underline">
-                      console.anthropic.com
-                    </a>
-                  </p>
-                </div>
+              <>
+                <APIKeyInput
+                  provider="anthropic"
+                  displayName="Anthropic (Claude)"
+                  value={keys.anthropic}
+                  maskedKey={maskedKeys.anthropic}
+                  placeholder="sk-ant-..."
+                  docsUrl="https://console.anthropic.com/"
+                  colorClass="bg-primary"
+                  onChange={(value) => setKeys({ ...keys, anthropic: value })}
+                />
 
-                {/* OpenAI/GPT */}
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 rounded-full bg-gpt"></div>
-                    <h3 className="font-semibold">OpenAI (GPT-4)</h3>
-                    {maskedKeys.openai && (
-                      <span className="ml-auto text-xs text-green-600 font-medium">
-                        Configured: {maskedKeys.openai}
-                      </span>
-                    )}
-                  </div>
-                  <input
-                    type="password"
-                    placeholder={maskedKeys.openai ? "Enter new key to update" : "sk-..."}
-                    value={keys.openai}
-                    onChange={(e) => setKeys({ ...keys, openai: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-gpt focus:border-transparent"
-                  />
-                  <p className="text-xs text-gray-500 mt-2">
-                    Get your API key from{" "}
-                    <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" className="text-gpt underline">
-                      platform.openai.com
-                    </a>
-                  </p>
-                </div>
+                <APIKeyInput
+                  provider="openai"
+                  displayName="OpenAI (GPT-4)"
+                  value={keys.openai}
+                  maskedKey={maskedKeys.openai}
+                  placeholder="sk-..."
+                  docsUrl="https://platform.openai.com/api-keys"
+                  colorClass="bg-secondary"
+                  onChange={(value) => setKeys({ ...keys, openai: value })}
+                />
 
-                {/* Google/Gemini */}
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 rounded-full gradient-gemini"></div>
-                    <h3 className="font-semibold">Google (Gemini)</h3>
-                    {maskedKeys.google && (
-                      <span className="ml-auto text-xs text-green-600 font-medium">
-                        Configured: {maskedKeys.google}
-                      </span>
-                    )}
-                  </div>
-                  <input
-                    type="password"
-                    placeholder={maskedKeys.google ? "Enter new key to update" : "AIza..."}
-                    value={keys.google}
-                    onChange={(e) => setKeys({ ...keys, google: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-gemini-start focus:border-transparent"
-                  />
-                  <p className="text-xs text-gray-500 mt-2">
-                    Get your API key from{" "}
-                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" className="text-gemini-start underline">
-                      aistudio.google.com
-                    </a>
-                  </p>
-                </div>
-              </div>
+                <APIKeyInput
+                  provider="google"
+                  displayName="Google (Gemini)"
+                  value={keys.google}
+                  maskedKey={maskedKeys.google}
+                  placeholder="AIza..."
+                  docsUrl="https://aistudio.google.com/app/apikey"
+                  colorClass="bg-accent"
+                  onChange={(value) => setKeys({ ...keys, google: value })}
+                />
+              </>
             )}
 
             {message && (
-              <div
-                className={`mt-4 p-4 rounded-lg ${
-                  message.type === "success"
-                    ? "bg-green-50 border border-green-200 text-green-800"
-                    : "bg-red-50 border border-red-200 text-red-800"
-                }`}
-              >
-                {message.text}
-              </div>
+              <Alert variant={message.type === "error" ? "destructive" : "default"}>
+                <AlertDescription>{message.text}</AlertDescription>
+              </Alert>
             )}
 
-            <button
+            <Button
               onClick={saveKeys}
               disabled={saving || loading}
-              className="mt-6 w-full px-4 py-2 bg-gradient-to-r from-claude to-gpt text-white rounded-lg font-semibold hover:shadow-lg transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full"
+              size="lg"
             >
               {saving ? "Saving..." : "Save API Keys"}
-            </button>
-          </div>
+            </Button>
+          </CardContent>
+        </Card>
 
-          <div className="pt-6 border-t border-gray-200">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-sm text-blue-800">
-                <strong>Security:</strong> Your API keys are encrypted using AES-256-GCM before being stored in the database. They are only decrypted when needed to make API calls on your behalf.
-              </p>
-            </div>
-          </div>
-        </div>
+        <SecurityNotice />
       </div>
     </div>
   );
