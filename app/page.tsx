@@ -27,7 +27,7 @@ export default async function Home() {
             </div>
             <h3 className="font-semibold text-lg mb-2">Claude</h3>
             <p className="text-sm text-gray-600">
-              Anthropic&apos;s powerful AI model known for thoughtful, nuanced responses
+              Choose from Haiku, Sonnet, or Opus models with your own Anthropic API key
             </p>
           </div>
 
@@ -35,19 +35,19 @@ export default async function Home() {
             <div className="w-12 h-12 rounded-full bg-gpt/10 flex items-center justify-center mb-4 mx-auto">
               <div className="w-6 h-6 rounded-full bg-gpt"></div>
             </div>
-            <h3 className="font-semibold text-lg mb-2">GPT-4</h3>
+            <h3 className="font-semibold text-lg mb-2">GPT</h3>
             <p className="text-sm text-gray-600">
-              OpenAI&apos;s flagship model with broad knowledge and strong reasoning
+              Select from GPT-4, GPT-5, or o1 models using your OpenAI API key
             </p>
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-            <div className="w-12 h-12 rounded-full gradient-gemini/10 flex items-center justify-center mb-4 mx-auto">
-              <div className="w-6 h-6 rounded-full gradient-gemini"></div>
+            <div className="w-12 h-12 rounded-full bg-gemini-start/10 flex items-center justify-center mb-4 mx-auto">
+              <div className="w-6 h-6 rounded-full bg-gemini-start"></div>
             </div>
             <h3 className="font-semibold text-lg mb-2">Gemini</h3>
             <p className="text-sm text-gray-600">
-              Google&apos;s advanced AI with multimodal capabilities and fast responses
+              Pick from Gemini 1.5, 2.0, or 2.5 models with your Google API key
             </p>
           </div>
         </div>
