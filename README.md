@@ -13,7 +13,7 @@ An innovative web application where Claude, GPT-4, and Gemini collaborate to rea
 
 ## Tech Stack
 
-- **Framework**: Next.js 15 with App Router
+- **Framework**: Next.js 16 with App Router
 - **AI SDK**: Vercel AI SDK v5
 - **Models**: Anthropic Claude, OpenAI GPT-4, Google Gemini
 - **Auth**: NextAuth.js v5
@@ -124,12 +124,14 @@ Make sure to:
 
 🚧 **In Active Development**
 
-Current phase: Project initialization and setup
+Current phase: API key management
 - ✅ Project structure created
 - ✅ Dependencies installed
 - ✅ Placeholder pages created
-- ⏳ Authentication (NextAuth.js) - Coming next
-- ⏳ API key management
+- ✅ Authentication (NextAuth.js with Google OAuth)
+- ✅ Database setup with Vercel Postgres
+- ✅ User session management
+- ⏳ API key management - In progress
 - ⏳ Consensus workflow
 - ⏳ Chat interface
 

@@ -6,7 +6,7 @@ export default auth((req) => {
   const { pathname } = req.nextUrl;
 
   // Protected routes
-  const protectedRoutes = ["/api/chat", "/settings"];
+  const protectedRoutes = ["/api/chat", "/api/keys", "/settings"];
   const isProtectedRoute = protectedRoutes.some((route) =>
     pathname.startsWith(route)
   );
