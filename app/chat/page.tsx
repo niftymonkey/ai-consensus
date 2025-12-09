@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { ANTHROPIC_MODELS, OPENAI_MODELS, GOOGLE_MODELS } from "@/lib/models";
 
 interface ModelResponse {
   content: string;
@@ -13,6 +16,11 @@ interface ModelResponse {
 export default function ChatPage() {
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedModels, setSelectedModels] = useState({
+    claude: "claude-3-5-haiku-20241022",
+    gpt: "gpt-5-chat-latest",
+    gemini: "gemini-2.5-flash-lite",
+  });
   const [responses, setResponses] = useState<{
     claude: ModelResponse;
     gpt: ModelResponse;
@@ -39,7 +47,10 @@ export default function ChatPage() {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({
+          prompt,
+          models: selectedModels,
+        }),
       });
 
       if (!response.ok) {
@@ -114,24 +125,39 @@ export default function ChatPage() {
   }
 
   function ModelColumn({
-    title,
+    modelKey,
+    models,
     color,
     response,
   }: {
-    title: string;
+    modelKey: "claude" | "gpt" | "gemini";
+    models: readonly { id: string; name: string }[];
     color: string;
     response: ModelResponse;
   }) {
     return (
       <div className="flex-1 border border-gray-200 rounded-lg">
         <div className={`px-4 py-3 border-b border-gray-200 ${color}`}>
-          <h3 className="font-semibold text-white">{title}</h3>
+          <select
+            value={selectedModels[modelKey]}
+            onChange={(e) =>
+              setSelectedModels({ ...selectedModels, [modelKey]: e.target.value })
+            }
+            disabled={isLoading}
+            className="w-full bg-white bg-opacity-20 text-white font-semibold rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {models.map((model) => (
+              <option key={model.id} value={model.id} className="text-gray-900">
+                {model.name}
+              </option>
+            ))}
+          </select>
         </div>
-        <div className="p-4 min-h-[400px] max-h-[600px] overflow-y-auto">
+        <div className="p-6 min-h-[500px] max-h-[800px] overflow-y-auto bg-gray-50">
           {response.hasError ? (
-            <div className="text-red-600 text-sm">
-              <p className="font-semibold mb-2">Error:</p>
-              <p>{response.errorMessage || "An error occurred"}</p>
+            <div className="text-red-600">
+              <p className="font-semibold mb-3 text-base">Error:</p>
+              <p className="text-sm leading-relaxed">{response.errorMessage || "An error occurred"}</p>
               {response.errorMessage === "API key not configured" && (
                 <Link
                   href="/settings"
@@ -142,14 +168,33 @@ export default function ChatPage() {
               )}
             </div>
           ) : response.content || response.isStreaming ? (
-            <div className="prose prose-sm max-w-none">
-              <p className="whitespace-pre-wrap">{response.content}</p>
+            <div className="markdown-content">
+              <style jsx>{`
+                .markdown-content ol + ul {
+                  margin-left: 3rem;
+                }
+              `}</style>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  p: ({node, ...props}) => <p className="mb-4 leading-relaxed" {...props} />,
+                  ul: ({node, ...props}) => <ul className="mb-4 ml-6 list-disc space-y-2" {...props} />,
+                  ol: ({node, ...props}) => <ol className="mb-4 ml-6 list-decimal space-y-2" {...props} />,
+                  li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
+                  h1: ({node, ...props}) => <h1 className="text-2xl font-bold mb-4 mt-6" {...props} />,
+                  h2: ({node, ...props}) => <h2 className="text-xl font-bold mb-3 mt-5" {...props} />,
+                  h3: ({node, ...props}) => <h3 className="text-lg font-bold mb-3 mt-4" {...props} />,
+                  strong: ({node, ...props}) => <strong className="font-bold text-gray-900" {...props} />,
+                }}
+              >
+                {response.content}
+              </ReactMarkdown>
               {response.isStreaming && (
-                <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse ml-1"></span>
+                <span className="inline-block w-2 h-5 bg-gray-600 animate-pulse ml-1 align-middle"></span>
               )}
             </div>
           ) : (
-            <p className="text-gray-400 text-sm">
+            <p className="text-gray-400 text-base italic">
               Response will appear here...
             </p>
           )}
@@ -159,17 +204,14 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="w-full px-6 py-8">
+      <div className="w-full mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">
-            <span className="bg-gradient-to-r from-claude via-gpt to-gemini-end bg-clip-text text-transparent">
-              AI Consensus
-            </span>
+            <p className="text-gray-600">
+              Ask a question and see responses from Claude, GPT, and Gemini
+            </p>
           </h1>
-          <p className="text-gray-600">
-            Ask a question and see responses from Claude, GPT-4, and Gemini
-          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="mb-8">
@@ -201,19 +243,22 @@ export default function ChatPage() {
           </div>
         </form>
 
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid lg:grid-cols-3 md:grid-cols-2 grid-cols-1 gap-8">
           <ModelColumn
-            title="Claude"
+            modelKey="claude"
+            models={ANTHROPIC_MODELS}
             color="bg-claude"
             response={responses.claude}
           />
           <ModelColumn
-            title="GPT-4"
+            modelKey="gpt"
+            models={OPENAI_MODELS}
             color="bg-gpt"
             response={responses.gpt}
           />
           <ModelColumn
-            title="Gemini"
+            modelKey="gemini"
+            models={GOOGLE_MODELS}
             color="bg-gemini-start"
             response={responses.gemini}
           />

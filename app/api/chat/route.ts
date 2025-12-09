@@ -19,11 +19,18 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { prompt } = await request.json();
+    const { prompt, models } = await request.json();
 
     if (!prompt || typeof prompt !== "string") {
       return new Response("Missing or invalid prompt", { status: 400 });
     }
+
+    // Default models if not provided
+    const selectedModels = {
+      claude: models?.claude || "claude-3-5-haiku-20241022",
+      gpt: models?.gpt || "gpt-5-chat-latest",
+      gemini: models?.gemini || "gemini-2.5-flash-lite",
+    };
 
     // Get user's API keys
     const keys = await getApiKeys(session.user.id);
@@ -119,7 +126,7 @@ export async function POST(request: NextRequest) {
           promises.push(
             streamModel("claude", keys.anthropic, () =>
               streamText({
-                model: anthropicProvider("claude-3-5-sonnet-20241022"),
+                model: anthropicProvider(selectedModels.claude),
                 prompt,
               })
             )
@@ -133,7 +140,7 @@ export async function POST(request: NextRequest) {
           promises.push(
             streamModel("gpt", keys.openai, () =>
               streamText({
-                model: openaiProvider("gpt-4o"),
+                model: openaiProvider(selectedModels.gpt),
                 prompt,
               })
             )
@@ -147,7 +154,7 @@ export async function POST(request: NextRequest) {
           promises.push(
             streamModel("gemini", keys.google, () =>
               streamText({
-                model: googleProvider("gemini-2.0-flash-exp"),
+                model: googleProvider(selectedModels.gemini),
                 prompt,
               })
             )
