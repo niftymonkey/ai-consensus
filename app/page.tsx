@@ -60,16 +60,16 @@ export default function Home() {
 
           <div className="flex gap-4 justify-center">
             <a
-              href="/login"
+              href="/api/auth/signin"
               className="px-6 py-3 bg-gradient-to-r from-claude to-gpt text-white rounded-lg font-semibold hover:shadow-lg transition-shadow"
             >
-              Sign In (Coming Soon)
+              Sign In
             </a>
             <a
               href="/settings"
               className="px-6 py-3 bg-white border border-gray-300 rounded-lg font-semibold hover:shadow-md transition-shadow"
             >
-              Settings (Coming Soon)
+              Settings
             </a>
           </div>
         </div>
