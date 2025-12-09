@@ -20,12 +20,9 @@ interface AvailableKeys {
 }
 
 export default function ChatPage() {
-  // TESTING: Change this value to test different scenarios (updates on save with hot reload)
-  // Options: null | "none" | "claude" | "gpt" | "gemini" | "claude-gpt" | "claude-gemini" | "gpt-gemini" | "all"
-  const TEST_MODE: string | null = null; // Set to null for production (uses real API call)
-
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [testMode, setTestMode] = useState<string | null>(null);
   const [availableKeys, setAvailableKeys] = useState<AvailableKeys | null>(null);
   const [selectedModels, setSelectedModels] = useState({
     claude: "claude-3-5-haiku-20241022",
@@ -42,10 +39,33 @@ export default function ChatPage() {
     gemini: { content: "", isStreaming: false, hasError: false },
   });
 
+  /**
+   * Dev Tools Testing:
+   * Open browser console and use setTestMode() to test different API key configurations.
+   * The UI updates instantly without refresh.
+   *
+   * Usage:
+   *   setTestMode("none")         // No keys
+   *   setTestMode("claude")       // Only Claude
+   *   setTestMode("gpt")          // Only GPT
+   *   setTestMode("gemini")       // Only Gemini
+   *   setTestMode("claude-gpt")   // Claude + GPT
+   *   setTestMode("claude-gemini") // Claude + Gemini
+   *   setTestMode("gpt-gemini")   // GPT + Gemini
+   *   setTestMode("all")          // All three
+   *   setTestMode(null)           // Use real API keys
+   */
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).setTestMode = (mode: string | null) => {
+        setTestMode(mode);
+      };
+    }
+  }, []);
+
   useEffect(() => {
     async function fetchAvailableKeys() {
-      // Handle test modes
-      if (TEST_MODE !== null) {
+      if (testMode) {
         const testScenarios: Record<string, AvailableKeys> = {
           "none": { anthropic: false, openai: false, google: false },
           "claude": { anthropic: true, openai: false, google: false },
@@ -57,8 +77,8 @@ export default function ChatPage() {
           "all": { anthropic: true, openai: true, google: true },
         };
 
-        if (testScenarios[TEST_MODE]) {
-          setAvailableKeys(testScenarios[TEST_MODE]);
+        if (testScenarios[testMode]) {
+          setAvailableKeys(testScenarios[testMode]);
           return;
         }
       }
@@ -79,7 +99,7 @@ export default function ChatPage() {
       }
     }
     fetchAvailableKeys();
-  }, [TEST_MODE]);
+  }, [testMode]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
