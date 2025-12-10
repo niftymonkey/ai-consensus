@@ -124,7 +124,7 @@ Make sure to:
 
 🚧 **In Active Development**
 
-Current phase: Chat interface
+Current phase: Consensus workflow
 - ✅ Project structure created
 - ✅ Dependencies installed
 - ✅ Placeholder pages created
@@ -132,8 +132,9 @@ Current phase: Chat interface
 - ✅ Database setup with Vercel Postgres
 - ✅ User session management
 - ✅ API key management with AES-256 encryption
-- ⏳ Chat interface - In progress
-- ⏳ Consensus workflow
+- ✅ Chat interface with parallel streaming
+- ✅ Theme system with 7 customizable themes
+- ⏳ Consensus workflow - Next up
 
 ## License
 

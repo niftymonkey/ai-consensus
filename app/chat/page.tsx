@@ -1,11 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { ChatHeader } from "@/components/chat/chat-header";
 import { ChatInput } from "@/components/chat/chat-input";
 import { ModelGrid } from "@/components/chat/model-grid";
 import { NoKeysAlert } from "@/components/chat/no-keys-alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { useAvailableModels } from "@/hooks/use-available-models";
+import { ANTHROPIC_MODELS, OPENAI_MODELS, GOOGLE_MODELS } from "@/lib/models";
 
 interface ModelResponse {
   content: string;
@@ -24,7 +28,14 @@ export default function ChatPage() {
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [testMode, setTestMode] = useState<string | null>(null);
-  const [availableKeys, setAvailableKeys] = useState<AvailableKeys | null>(null);
+  const [testModeKeys, setTestModeKeys] = useState<AvailableKeys | null>(null);
+
+  // Use the new hook to fetch available models
+  const { models: availableModels, hasKeys, isLoading: modelsLoading } = useAvailableModels();
+
+  // Use test mode keys if in test mode, otherwise use real keys from hook
+  const availableKeys = testMode ? testModeKeys : hasKeys;
+
   const [selectedModels, setSelectedModels] = useState({
     claude: "claude-3-5-haiku-20241022",
     gpt: "gpt-5-chat-latest",
@@ -64,42 +75,38 @@ export default function ChatPage() {
     }
   }, []);
 
+  // Handle test mode
   useEffect(() => {
-    async function fetchAvailableKeys() {
-      if (testMode) {
-        const testScenarios: Record<string, AvailableKeys> = {
-          "none": { anthropic: false, openai: false, google: false },
-          "claude": { anthropic: true, openai: false, google: false },
-          "gpt": { anthropic: false, openai: true, google: false },
-          "gemini": { anthropic: false, openai: false, google: true },
-          "claude-gpt": { anthropic: true, openai: true, google: false },
-          "claude-gemini": { anthropic: true, openai: false, google: true },
-          "gpt-gemini": { anthropic: false, openai: true, google: true },
-          "all": { anthropic: true, openai: true, google: true },
-        };
+    if (testMode) {
+      const testScenarios: Record<string, AvailableKeys> = {
+        "none": { anthropic: false, openai: false, google: false },
+        "claude": { anthropic: true, openai: false, google: false },
+        "gpt": { anthropic: false, openai: true, google: false },
+        "gemini": { anthropic: false, openai: false, google: true },
+        "claude-gpt": { anthropic: true, openai: true, google: false },
+        "claude-gemini": { anthropic: true, openai: false, google: true },
+        "gpt-gemini": { anthropic: false, openai: true, google: true },
+        "all": { anthropic: true, openai: true, google: true },
+      };
 
-        if (testScenarios[testMode]) {
-          setAvailableKeys(testScenarios[testMode]);
-          return;
-        }
+      if (testScenarios[testMode]) {
+        setTestModeKeys(testScenarios[testMode]);
       }
-
-      try {
-        const response = await fetch("/api/keys");
-        if (response.ok) {
-          const data = await response.json();
-          setAvailableKeys({
-            anthropic: !!data.keys.anthropic,
-            openai: !!data.keys.openai,
-            google: !!data.keys.google,
-          });
-        }
-      } catch (error) {
-        console.error("Failed to fetch API keys:", error);
-      }
+    } else {
+      setTestModeKeys(null);
     }
-    fetchAvailableKeys();
   }, [testMode]);
+
+  // Update selected models when available models change
+  useEffect(() => {
+    if (availableModels && !testMode) {
+      setSelectedModels({
+        claude: availableModels.anthropic[0]?.id || "claude-3-5-haiku-20241022",
+        gpt: availableModels.openai[0]?.id || "gpt-5-chat-latest",
+        gemini: availableModels.google[0]?.id || "gemini-2.5-flash-lite",
+      });
+    }
+  }, [availableModels, testMode]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -197,7 +204,14 @@ export default function ChatPage() {
   const hasAnyKeys = availableKeys && (availableKeys.anthropic || availableKeys.openai || availableKeys.google);
   const keyCount = availableKeys ? [availableKeys.anthropic, availableKeys.openai, availableKeys.google].filter(Boolean).length : 0;
 
-  if (availableKeys === null) {
+  // Use full model list in test mode, otherwise use filtered models from hook
+  const modelsToUse = testMode
+    ? { anthropic: ANTHROPIC_MODELS.map(m => ({ ...m, provider: 'anthropic' as const })),
+        openai: OPENAI_MODELS.map(m => ({ ...m, provider: 'openai' as const })),
+        google: GOOGLE_MODELS.map(m => ({ ...m, provider: 'google' as const })) }
+    : availableModels;
+
+  if (availableKeys === null || (modelsLoading && !testMode)) {
     return (
       <div className="container py-8">
         <div className="flex min-h-[400px] items-center justify-center">
@@ -222,6 +236,13 @@ export default function ChatPage() {
     <div className="container py-12">
       <div className="space-y-10">
         <ChatHeader keyCount={keyCount} />
+        <div className="flex justify-center">
+          <Link href="/consensus">
+            <Button variant="outline">
+              Try Consensus Mode
+            </Button>
+          </Link>
+        </div>
         <div className="mx-auto w-full max-w-[80%]">
           <ChatInput
             prompt={prompt}
@@ -232,6 +253,7 @@ export default function ChatPage() {
         </div>
         <ModelGrid
           availableKeys={availableKeys}
+          availableModels={modelsToUse}
           selectedModels={selectedModels}
           setSelectedModels={setSelectedModels}
           responses={responses}

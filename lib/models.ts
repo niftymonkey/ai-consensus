@@ -52,3 +52,30 @@ export const GOOGLE_MODELS = [
 export type AnthropicModelId = typeof ANTHROPIC_MODELS[number]['id'];
 export type OpenAIModelId = typeof OPENAI_MODELS[number]['id'];
 export type GoogleModelId = typeof GOOGLE_MODELS[number]['id'];
+
+// Unified model interface with provider information
+export interface UnifiedModel {
+  id: string;
+  name: string;
+  provider: 'anthropic' | 'openai' | 'google';
+}
+
+export interface ProviderModels {
+  anthropic: UnifiedModel[];
+  openai: UnifiedModel[];
+  google: UnifiedModel[];
+}
+
+// Unified exports with provider field
+export const UNIFIED_MODELS: ProviderModels = {
+  anthropic: ANTHROPIC_MODELS.map(m => ({ ...m, provider: 'anthropic' as const })),
+  openai: OPENAI_MODELS.map(m => ({ ...m, provider: 'openai' as const })),
+  google: GOOGLE_MODELS.map(m => ({ ...m, provider: 'google' as const }))
+};
+
+// Flat list of all models for easy iteration
+export const ALL_MODELS: UnifiedModel[] = [
+  ...UNIFIED_MODELS.anthropic,
+  ...UNIFIED_MODELS.openai,
+  ...UNIFIED_MODELS.google
+];

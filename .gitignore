@@ -52,3 +52,5 @@ yarn-error.log*
 
 # pnpm
 .pnpm-debug.log*
+
+plans/

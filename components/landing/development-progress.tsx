@@ -4,32 +4,32 @@ import { Badge } from "@/components/ui/badge";
 export function DevelopmentProgress() {
   return (
     <Alert>
-      <AlertTitle>Development Progress</AlertTitle>
+      <AlertTitle>Key Features</AlertTitle>
       <AlertDescription className="text-left">
         <ul className="mt-2 space-y-2">
           <li className="flex items-center gap-2">
-            <Badge className="inline-flex items-center justify-center bg-green-600 py-1 leading-none hover:bg-green-600">Done</Badge>
-            <span>Project initialized with Next.js 16 and Tailwind CSS</span>
+            <Badge className="inline-flex items-center justify-center bg-green-600 py-1 leading-none hover:bg-green-600">✓</Badge>
+            <span>Sign in with Google or Discord</span>
           </li>
           <li className="flex items-center gap-2">
-            <Badge className="inline-flex items-center justify-center bg-green-600 py-1 leading-none hover:bg-green-600">Done</Badge>
-            <span>NextAuth.js authentication with Google OAuth</span>
+            <Badge className="inline-flex items-center justify-center bg-green-600 py-1 leading-none hover:bg-green-600">✓</Badge>
+            <span>Support for Claude, GPT, and Gemini models</span>
           </li>
           <li className="flex items-center gap-2">
-            <Badge className="inline-flex items-center justify-center bg-green-600 py-1 leading-none hover:bg-green-600">Done</Badge>
-            <span>Secure API key management with AES-256 encryption</span>
+            <Badge className="inline-flex items-center justify-center bg-green-600 py-1 leading-none hover:bg-green-600">✓</Badge>
+            <span>Dynamic model selection based on your API keys</span>
           </li>
           <li className="flex items-center gap-2">
-            <Badge className="inline-flex items-center justify-center bg-green-600 py-1 leading-none hover:bg-green-600">Done</Badge>
-            <span>Chat interface with parallel AI streaming</span>
+            <Badge className="inline-flex items-center justify-center bg-green-600 py-1 leading-none hover:bg-green-600">✓</Badge>
+            <span>Consensus Mode - Watch AI models collaborate and refine answers</span>
           </li>
           <li className="flex items-center gap-2">
-            <Badge className="inline-flex items-center justify-center bg-green-600 py-1 leading-none hover:bg-green-600">Done</Badge>
-            <span>Model selection for Claude, GPT, and Gemini</span>
+            <Badge className="inline-flex items-center justify-center bg-green-600 py-1 leading-none hover:bg-green-600">✓</Badge>
+            <span>Simple Chat - Quick responses from multiple models at once</span>
           </li>
           <li className="flex items-center gap-2">
-            <Badge className="inline-flex items-center justify-center bg-amber-500 py-1 leading-none hover:bg-amber-500">In Progress</Badge>
-            <span>Consensus workflow with iterative refinement</span>
+            <Badge className="inline-flex items-center justify-center bg-green-600 py-1 leading-none hover:bg-green-600">✓</Badge>
+            <span>Encrypted API key storage (AES-256)</span>
           </li>
         </ul>
       </AlertDescription>
