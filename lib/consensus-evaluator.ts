@@ -15,17 +15,37 @@ export const consensusEvaluationSchema = z.object({
     .min(0)
     .max(100)
     .describe("Consensus score from 0-100, where 100 is perfect alignment"),
-  reasoning: z
+
+  // Fun, punchy summary
+  summary: z
     .string()
-    .describe("Detailed explanation of why this score was assigned"),
+    .describe("1-2 sentence conversational summary in casual language"),
+
+  emoji: z
+    .string()
+    .describe("Single emoji: 🎉 (90-100), 👍 (75-89), 🤔 (50-74), ⚠️ (30-49), 💥 (0-29)"),
+
+  vibe: z
+    .enum(["celebration", "agreement", "mixed", "disagreement", "clash"])
+    .describe("Overall feeling: celebration (90-100), agreement (75-89), mixed (50-74), disagreement (30-49), clash (0-29)"),
+
+  // Agreement-first approach
+  areasOfAgreement: z
+    .array(z.string())
+    .describe("3-5 things models agree on, even if minor. Celebrate commonality first!"),
+
+  // Differences and detailed reasoning
   keyDifferences: z
     .array(z.string())
-    .describe("List of main points where the models disagree or diverge"),
+    .describe("3-5 dramatic differences. Use punchy, conversational language with personality"),
+
+  reasoning: z
+    .string()
+    .describe("2-3 paragraph conversational explanation. Friendly tone, less academic"),
+
   isGoodEnough: z
     .boolean()
-    .describe(
-      "Whether consensus is sufficient to stop iterating (true if score >= threshold)"
-    ),
+    .describe("Whether consensus is sufficient to stop iterating (true if score >= threshold)"),
 });
 
 export type ConsensusEvaluation = z.infer<typeof consensusEvaluationSchema>;
@@ -67,10 +87,16 @@ export async function evaluateConsensusWithStream(
     for await (const partialObject of result.partialObjectStream) {
       onPartialUpdate({
         score: partialObject.score ?? 0,
-        reasoning: partialObject.reasoning ?? "",
+        summary: partialObject.summary ?? "",
+        emoji: partialObject.emoji ?? "🤔",
+        vibe: partialObject.vibe ?? "mixed",
+        areasOfAgreement: Array.isArray(partialObject.areasOfAgreement)
+          ? partialObject.areasOfAgreement.filter((a): a is string => a !== undefined)
+          : [],
         keyDifferences: Array.isArray(partialObject.keyDifferences)
           ? partialObject.keyDifferences.filter((d): d is string => d !== undefined)
           : [],
+        reasoning: partialObject.reasoning ?? "",
         isGoodEnough: partialObject.isGoodEnough ?? false,
       });
     }

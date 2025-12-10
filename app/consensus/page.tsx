@@ -193,10 +193,41 @@ export default function ConsensusPage() {
         });
         break;
 
-      case "evaluation":
-        setCurrentEvaluation(event.data);
-        currentEvaluationRef.current = event.data;
+      case "evaluation": {
+        // Ensure all new fields are properly handled
+        const score = event.data.score || 0;
+
+        // Calculate vibe and emoji from score if not provided
+        const getVibeFromScore = (s: number): "celebration" | "agreement" | "mixed" | "disagreement" | "clash" => {
+          if (s >= 90) return "celebration";
+          if (s >= 75) return "agreement";
+          if (s >= 50) return "mixed";
+          if (s >= 30) return "disagreement";
+          return "clash";
+        };
+
+        const getEmojiFromScore = (s: number): string => {
+          if (s >= 90) return "🎉";
+          if (s >= 75) return "👍";
+          if (s >= 50) return "🤔";
+          if (s >= 30) return "⚠️";
+          return "💥";
+        };
+
+        const evaluationData: Partial<ConsensusEvaluation> = {
+          score,
+          summary: event.data.summary || "",
+          emoji: event.data.emoji || getEmojiFromScore(score),
+          vibe: event.data.vibe || getVibeFromScore(score),
+          areasOfAgreement: event.data.areasOfAgreement || [],
+          keyDifferences: event.data.keyDifferences || [],
+          reasoning: event.data.reasoning || "",
+          isGoodEnough: event.data.isGoodEnough || false,
+        };
+        setCurrentEvaluation(evaluationData);
+        currentEvaluationRef.current = evaluationData;
         break;
+      }
 
       case "refinement-prompts":
         // Save current round as complete (use ref to avoid stale closure)
@@ -206,8 +237,12 @@ export default function ConsensusPage() {
             responses: new Map(currentRoundResponsesRef.current),
             evaluation: {
               score: currentEvaluationRef.current.score || 0,
-              reasoning: currentEvaluationRef.current.reasoning || "",
+              summary: currentEvaluationRef.current.summary || "",
+              emoji: currentEvaluationRef.current.emoji || "🤔",
+              vibe: currentEvaluationRef.current.vibe || "mixed",
+              areasOfAgreement: currentEvaluationRef.current.areasOfAgreement || [],
               keyDifferences: currentEvaluationRef.current.keyDifferences || [],
+              reasoning: currentEvaluationRef.current.reasoning || "",
               isGoodEnough: currentEvaluationRef.current.isGoodEnough || false,
             },
             refinementPrompts: event.data,
@@ -224,8 +259,12 @@ export default function ConsensusPage() {
             responses: new Map(currentRoundResponsesRef.current),
             evaluation: {
               score: currentEvaluationRef.current.score || 0,
-              reasoning: currentEvaluationRef.current.reasoning || "",
+              summary: currentEvaluationRef.current.summary || "",
+              emoji: currentEvaluationRef.current.emoji || "🤔",
+              vibe: currentEvaluationRef.current.vibe || "mixed",
+              areasOfAgreement: currentEvaluationRef.current.areasOfAgreement || [],
               keyDifferences: currentEvaluationRef.current.keyDifferences || [],
+              reasoning: currentEvaluationRef.current.reasoning || "",
               isGoodEnough: currentEvaluationRef.current.isGoodEnough || false,
             },
           };

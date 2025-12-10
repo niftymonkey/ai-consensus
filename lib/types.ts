@@ -11,8 +11,18 @@ export interface ModelSelection {
 
 export interface ConsensusEvaluation {
   score: number;
-  reasoning: string;
-  keyDifferences: string[];
+
+  // Fun, punchy summary
+  summary: string;          // 1-2 sentence conversational summary
+  emoji: string;            // Single emoji: 🎉 (90-100), 👍 (75-89), 🤔 (50-74), ⚠️ (30-49), 💥 (0-29)
+  vibe: "celebration" | "agreement" | "mixed" | "disagreement" | "clash";
+
+  // Agreement-first approach
+  areasOfAgreement: string[];  // What models DO agree on (shown first!)
+
+  // Differences and detailed reasoning
+  keyDifferences: string[];    // Reworded more dramatically
+  reasoning: string;           // More conversational, less academic (collapsible)
   isGoodEnough: boolean;
 }
 
