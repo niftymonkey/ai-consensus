@@ -18,7 +18,26 @@ export default auth((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+
+  // Add CSP headers for production
+  const cspHeader = `
+    default-src 'self';
+    script-src 'self' 'unsafe-eval' 'unsafe-inline';
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' blob: data: https://lh3.googleusercontent.com https://cdn.discordapp.com;
+    font-src 'self';
+    connect-src 'self' https://generativelanguage.googleapis.com https://api.openai.com https://api.anthropic.com;
+    object-src 'none';
+    base-uri 'self';
+    form-action 'self';
+    frame-ancestors 'none';
+    upgrade-insecure-requests;
+  `.replace(/\s{2,}/g, ' ').trim();
+
+  response.headers.set('Content-Security-Policy', cspHeader);
+
+  return response;
 });
 
 export const config = {

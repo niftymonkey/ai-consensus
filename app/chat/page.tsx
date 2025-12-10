@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { ChatHeader } from "@/components/chat/chat-header";
 import { ChatInput } from "@/components/chat/chat-input";
 import { ModelGrid } from "@/components/chat/model-grid";
 import { NoKeysAlert } from "@/components/chat/no-keys-alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 
 interface ModelResponse {
   content: string;
@@ -222,6 +224,13 @@ export default function ChatPage() {
     <div className="container py-12">
       <div className="space-y-10">
         <ChatHeader keyCount={keyCount} />
+        <div className="flex justify-center">
+          <Link href="/consensus">
+            <Button variant="outline">
+              Try Consensus Mode
+            </Button>
+          </Link>
+        </div>
         <div className="mx-auto w-full max-w-[80%]">
           <ChatInput
             prompt={prompt}

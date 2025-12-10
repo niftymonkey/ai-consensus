@@ -6,6 +6,9 @@ CREATE TABLE IF NOT EXISTS users (
   email VARCHAR(255) UNIQUE NOT NULL,
   name VARCHAR(255),
   image TEXT,
+  consensus_max_rounds INTEGER DEFAULT 3,
+  consensus_threshold INTEGER DEFAULT 80,
+  consensus_evaluator_model VARCHAR(100) DEFAULT 'claude-3-7-sonnet-20250219',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -52,3 +55,36 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_accounts_user ON accounts(user_id);
+
+-- Consensus Workflow Tables
+CREATE TABLE IF NOT EXISTS consensus_conversations (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  prompt TEXT NOT NULL,
+  max_rounds INTEGER NOT NULL,
+  consensus_threshold INTEGER NOT NULL,
+  final_consensus_text TEXT,
+  final_consensus_score INTEGER,
+  rounds_completed INTEGER,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_consensus_conversations_user
+  ON consensus_conversations(user_id);
+
+-- Store individual rounds with meta-conversation
+CREATE TABLE IF NOT EXISTS consensus_rounds (
+  id SERIAL PRIMARY KEY,
+  conversation_id INTEGER REFERENCES consensus_conversations(id) ON DELETE CASCADE,
+  round_number INTEGER NOT NULL,
+  model_responses JSONB NOT NULL, -- { "model-1": "response", "model-2": "response", ... }
+  evaluation_reasoning TEXT,
+  evaluation_key_differences JSONB,  -- Array of strings
+  consensus_score INTEGER,
+  refinement_prompts JSONB, -- { "model-1": "prompt", "model-2": "prompt", ... }
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(conversation_id, round_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_consensus_rounds_conversation
+  ON consensus_rounds(conversation_id);
