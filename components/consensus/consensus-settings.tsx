@@ -59,7 +59,7 @@ export function ConsensusSettings({
             id="consensus-threshold"
             min={60}
             max={95}
-            step={5}
+            step={1}
             value={[consensusThreshold]}
             onValueChange={([value]) => setConsensusThreshold(value)}
             disabled={disabled}

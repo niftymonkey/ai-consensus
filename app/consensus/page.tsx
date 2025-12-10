@@ -282,13 +282,6 @@ export default function ConsensusPage() {
   return (
     <div className="container py-12">
       <div className="space-y-10">
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold">Consensus Mode</h1>
-          <p className="text-muted-foreground">
-            Watch AI models collaborate and refine their responses
-          </p>
-        </div>
-
         {/* Input */}
         <div className="mx-auto w-full max-w-[80%]">
           <ChatInput

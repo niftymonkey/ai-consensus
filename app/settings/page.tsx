@@ -116,7 +116,7 @@ export default function SettingsPage() {
 
                 <APIKeyInput
                   provider="openai"
-                  displayName="OpenAI (GPT-4)"
+                  displayName="OpenAI (GPT)"
                   value={keys.openai}
                   maskedKey={maskedKeys.openai}
                   placeholder="sk-..."
