@@ -189,7 +189,12 @@ export async function POST(request: NextRequest) {
             );
 
             finalScore = evaluation.score;
-            isGoodEnough = evaluation.isGoodEnough;
+            // Fallback: Enforce isGoodEnough logic in case LLM makes a mistake
+            isGoodEnough = evaluation.isGoodEnough || evaluation.score >= consensusThreshold;
+
+            // Debug logging
+            console.log(`[Round ${currentRound}] Score: ${evaluation.score}, Threshold: ${consensusThreshold}, LLM isGoodEnough: ${evaluation.isGoodEnough}, Final isGoodEnough: ${isGoodEnough}`);
+
             previousResponses = roundResponses;
 
             // Save round to database

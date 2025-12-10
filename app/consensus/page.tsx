@@ -1,18 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { useState, useEffect, useRef } from "react";
 import { ChatHeader } from "@/components/chat/chat-header";
 import { ChatInput } from "@/components/chat/chat-input";
 import { NoKeysAlert } from "@/components/chat/no-keys-alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ConsensusSettings } from "@/components/consensus/consensus-settings";
-import { RoundIndicator } from "@/components/consensus/round-indicator";
-import { MetaConversation } from "@/components/consensus/meta-conversation";
+import { RoundsPanel } from "@/components/consensus/rounds-panel";
 import { DualView } from "@/components/consensus/dual-view";
 import { ModelSelector } from "@/components/consensus/model-selector";
+import { useAvailableModels } from "@/hooks/use-available-models";
 import type {
   ModelSelection,
   RoundData,
@@ -29,7 +26,9 @@ interface AvailableKeys {
 export default function ConsensusPage() {
   const [prompt, setPrompt] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [availableKeys, setAvailableKeys] = useState<AvailableKeys | null>(null);
+
+  // Use the new hook to fetch available models
+  const { models: availableModels, hasKeys: availableKeys, isLoading: modelsLoading } = useAvailableModels();
 
   // Settings
   const [maxRounds, setMaxRounds] = useState(3);
@@ -48,25 +47,40 @@ export default function ConsensusPage() {
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
 
-  // Fetch available API keys
+  // Use refs to track latest values for event handling (avoids stale closures)
+  const currentEvaluationRef = useRef<Partial<ConsensusEvaluation> | null>(null);
+  const currentRoundResponsesRef = useRef<Map<string, string>>(new Map());
+  const currentRoundRef = useRef<number>(0);
+
+  // Initialize default models when available models are loaded
   useEffect(() => {
-    async function fetchAvailableKeys() {
-      try {
-        const response = await fetch("/api/keys");
-        if (response.ok) {
-          const data = await response.json();
-          setAvailableKeys({
-            anthropic: !!data.keys.anthropic,
-            openai: !!data.keys.openai,
-            google: !!data.keys.google,
-          });
-        }
-      } catch (error) {
-        console.error("Failed to fetch API keys:", error);
+    if (availableModels && selectedModels.length === 0) {
+      const defaultModels: ModelSelection[] = [];
+
+      if (availableModels.anthropic.length > 0) {
+        defaultModels.push({
+          id: "model-1",
+          provider: "anthropic",
+          modelId: availableModels.anthropic[0].id,
+          label: availableModels.anthropic[0].name,
+        });
+      }
+
+      if (availableModels.openai.length > 0) {
+        defaultModels.push({
+          id: "model-2",
+          provider: "openai",
+          modelId: availableModels.openai[0].id,
+          label: availableModels.openai[0].name,
+        });
+      }
+
+      // Only initialize if we have at least 2 models
+      if (defaultModels.length >= 2) {
+        setSelectedModels(defaultModels);
       }
     }
-    fetchAvailableKeys();
-  }, []);
+  }, [availableModels, selectedModels.length]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -110,20 +124,41 @@ export default function ConsensusPage() {
         throw new Error("No response stream");
       }
 
+      let buffer = ""; // Buffer for incomplete JSON lines
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n").filter((line) => line.trim());
+        // Decode chunk and append to buffer
+        buffer += decoder.decode(value, { stream: true });
 
+        // Split by newlines
+        const lines = buffer.split("\n");
+
+        // Keep the last (potentially incomplete) line in the buffer
+        buffer = lines.pop() || "";
+
+        // Process complete lines
         for (const line of lines) {
+          if (!line.trim()) continue;
+
           try {
             const event: ConsensusStreamEvent = JSON.parse(line);
             handleStreamEvent(event);
           } catch (e) {
-            console.error("Failed to parse chunk:", e);
+            console.error("Failed to parse chunk:", e, "Line:", line);
           }
+        }
+      }
+
+      // Process any remaining buffered data
+      if (buffer.trim()) {
+        try {
+          const event: ConsensusStreamEvent = JSON.parse(buffer);
+          handleStreamEvent(event);
+        } catch (e) {
+          console.error("Failed to parse final buffer:", e);
         }
       }
     } catch (error: any) {
@@ -142,33 +177,38 @@ export default function ConsensusPage() {
 
       case "round-status":
         setCurrentRound(event.data.roundNumber);
+        currentRoundRef.current = event.data.roundNumber;
         setCurrentRoundResponses(new Map());
+        currentRoundResponsesRef.current = new Map();
         setCurrentEvaluation(null);
+        currentEvaluationRef.current = null;
         break;
 
       case "model-response":
         setCurrentRoundResponses((prev) => {
           const updated = new Map(prev);
           updated.set(event.data.modelId, event.data.content);
+          currentRoundResponsesRef.current = updated;
           return updated;
         });
         break;
 
       case "evaluation":
         setCurrentEvaluation(event.data);
+        currentEvaluationRef.current = event.data;
         break;
 
       case "refinement-prompts":
-        // Save current round as complete
-        if (currentEvaluation) {
+        // Save current round as complete (use ref to avoid stale closure)
+        if (currentEvaluationRef.current) {
           const roundData: RoundData = {
             roundNumber: event.round,
-            responses: new Map(currentRoundResponses),
+            responses: new Map(currentRoundResponsesRef.current),
             evaluation: {
-              score: currentEvaluation.score || 0,
-              reasoning: currentEvaluation.reasoning || "",
-              keyDifferences: currentEvaluation.keyDifferences || [],
-              isGoodEnough: currentEvaluation.isGoodEnough || false,
+              score: currentEvaluationRef.current.score || 0,
+              reasoning: currentEvaluationRef.current.reasoning || "",
+              keyDifferences: currentEvaluationRef.current.keyDifferences || [],
+              isGoodEnough: currentEvaluationRef.current.isGoodEnough || false,
             },
             refinementPrompts: event.data,
           };
@@ -177,16 +217,16 @@ export default function ConsensusPage() {
         break;
 
       case "synthesis-start":
-        // Save final round without refinement prompts
-        if (currentEvaluation) {
+        // Save final round without refinement prompts (use ref to avoid stale closure)
+        if (currentEvaluationRef.current) {
           const roundData: RoundData = {
-            roundNumber: currentRound,
-            responses: new Map(currentRoundResponses),
+            roundNumber: currentRoundRef.current,
+            responses: new Map(currentRoundResponsesRef.current),
             evaluation: {
-              score: currentEvaluation.score || 0,
-              reasoning: currentEvaluation.reasoning || "",
-              keyDifferences: currentEvaluation.keyDifferences || [],
-              isGoodEnough: currentEvaluation.isGoodEnough || false,
+              score: currentEvaluationRef.current.score || 0,
+              reasoning: currentEvaluationRef.current.reasoning || "",
+              keyDifferences: currentEvaluationRef.current.keyDifferences || [],
+              isGoodEnough: currentEvaluationRef.current.isGoodEnough || false,
             },
           };
           setRounds((prev) => [...prev, roundData]);
@@ -216,7 +256,7 @@ export default function ConsensusPage() {
   const hasAnyKeys = availableKeys && (availableKeys.anthropic || availableKeys.openai || availableKeys.google);
   const keyCount = availableKeys ? [availableKeys.anthropic, availableKeys.openai, availableKeys.google].filter(Boolean).length : 0;
 
-  if (availableKeys === null) {
+  if (availableKeys === null || modelsLoading) {
     return (
       <div className="container py-8">
         <div className="flex min-h-[400px] items-center justify-center">
@@ -249,23 +289,6 @@ export default function ConsensusPage() {
           </p>
         </div>
 
-        {/* Model Selection */}
-        <ModelSelector
-          availableKeys={availableKeys}
-          selectedModels={selectedModels}
-          setSelectedModels={setSelectedModels}
-          disabled={isProcessing}
-        />
-
-        {/* Settings */}
-        <ConsensusSettings
-          maxRounds={maxRounds}
-          setMaxRounds={setMaxRounds}
-          consensusThreshold={consensusThreshold}
-          setConsensusThreshold={setConsensusThreshold}
-          disabled={isProcessing}
-        />
-
         {/* Input */}
         <div className="mx-auto w-full max-w-[80%]">
           <ChatInput
@@ -276,76 +299,41 @@ export default function ConsensusPage() {
           />
         </div>
 
-        {/* Round Indicator */}
+        {/* Model Selection and Settings */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Model Selection */}
+          {availableModels && (
+            <ModelSelector
+              availableKeys={availableKeys}
+              availableModels={availableModels}
+              selectedModels={selectedModels}
+              setSelectedModels={setSelectedModels}
+              disabled={isProcessing}
+            />
+          )}
+
+          {/* Settings */}
+          <ConsensusSettings
+            maxRounds={maxRounds}
+            setMaxRounds={setMaxRounds}
+            consensusThreshold={consensusThreshold}
+            setConsensusThreshold={setConsensusThreshold}
+            disabled={isProcessing}
+          />
+        </div>
+
+        {/* Rounds Panel */}
         {currentRound > 0 && (
-          <RoundIndicator
+          <RoundsPanel
             currentRound={currentRound}
             maxRounds={maxRounds}
-            rounds={rounds.map((r) => ({
-              roundNumber: r.roundNumber,
-              consensusScore: r.evaluation.score,
-            }))}
-            isSynthesizing={isSynthesizing}
-          />
-        )}
-
-        {/* Current Round Responses */}
-        {isProcessing && currentRoundResponses.size > 0 && !isSynthesizing && (
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">
-              Round {currentRound} Responses
-            </h3>
-            <div className={`grid gap-4 ${selectedModels.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-              {selectedModels.map((model) => (
-                <Card key={model.id}>
-                  <CardHeader>
-                    <h4 className="font-semibold">{model.label}</h4>
-                  </CardHeader>
-                  <CardContent className="max-h-[400px] overflow-y-auto">
-                    <div className="markdown-content text-sm">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          p: ({ node, ...props }) => <p className="mb-4 leading-relaxed" {...props} />,
-                          ul: ({ node, ...props }) => <ul className="mb-4 ml-6 list-disc space-y-2" {...props} />,
-                          ol: ({ node, ...props }) => <ol className="mb-4 ml-6 list-decimal space-y-2" {...props} />,
-                          li: ({ node, ...props }) => <li className="leading-relaxed" {...props} />,
-                          h1: ({ node, ...props }) => <h1 className="mb-4 mt-6 text-2xl font-bold" {...props} />,
-                          h2: ({ node, ...props }) => <h2 className="mb-3 mt-5 text-xl font-bold" {...props} />,
-                          h3: ({ node, ...props}) => <h3 className="mb-3 mt-4 text-lg font-bold" {...props} />,
-                          strong: ({ node, ...props }) => <strong className="font-bold" {...props} />,
-                        }}
-                      >
-                        {currentRoundResponses.get(model.id) || "Waiting..."}
-                      </ReactMarkdown>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Current Evaluation */}
-        {currentEvaluation && (
-          <div className="p-4 border rounded-lg bg-muted/50">
-            <h4 className="font-semibold mb-2">Consensus Evaluation</h4>
-            <p className="text-sm mb-2">
-              Score: {currentEvaluation.score}/100
-            </p>
-            {currentEvaluation.reasoning && (
-              <p className="text-sm text-muted-foreground">
-                {currentEvaluation.reasoning}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Meta-Conversation History */}
-        {rounds.length > 0 && (
-          <MetaConversation
             rounds={rounds}
             selectedModels={selectedModels}
+            isSynthesizing={isSynthesizing}
+            isProcessing={isProcessing}
+            consensusThreshold={consensusThreshold}
+            currentRoundResponses={currentRoundResponses}
+            currentEvaluation={currentEvaluation}
           />
         )}
 

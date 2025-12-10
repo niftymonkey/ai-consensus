@@ -11,9 +11,10 @@ import type { RoundData, ModelSelection } from "@/lib/types";
 interface MetaConversationProps {
   rounds: RoundData[];
   selectedModels: ModelSelection[];
+  consensusThreshold: number;
 }
 
-export function MetaConversation({ rounds, selectedModels }: MetaConversationProps) {
+export function MetaConversation({ rounds, selectedModels, consensusThreshold }: MetaConversationProps) {
   if (rounds.length === 0) return null;
 
   return (
@@ -33,7 +34,12 @@ export function MetaConversation({ rounds, selectedModels }: MetaConversationPro
                   <span className="font-semibold">Round {round.roundNumber}</span>
                   <div className="flex items-center gap-2">
                     <Badge
-                      variant={round.evaluation.score >= 80 ? "default" : "secondary"}
+                      variant="default"
+                      className={`text-white ${
+                        round.evaluation.score >= consensusThreshold
+                          ? "bg-green-500 hover:bg-green-600"
+                          : "bg-red-500 hover:bg-red-600"
+                      }`}
                     >
                       Consensus: {round.evaluation.score}%
                     </Badge>

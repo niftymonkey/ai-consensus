@@ -1,6 +1,6 @@
 import { ModelColumn } from "./model-column";
 import { PlaceholderColumn } from "./placeholder-column";
-import { ANTHROPIC_MODELS, OPENAI_MODELS, GOOGLE_MODELS } from "@/lib/models";
+import type { ProviderModels } from "@/lib/models";
 
 interface ModelResponse {
   content: string;
@@ -17,6 +17,7 @@ interface AvailableKeys {
 
 interface ModelGridProps {
   availableKeys: AvailableKeys;
+  availableModels: ProviderModels | null;
   selectedModels: {
     claude: string;
     gpt: string;
@@ -33,17 +34,29 @@ interface ModelGridProps {
 
 export function ModelGrid({
   availableKeys,
+  availableModels,
   selectedModels,
   setSelectedModels,
   responses,
   isLoading,
 }: ModelGridProps) {
+  // If models not loaded yet, show loading placeholders
+  if (!availableModels) {
+    return (
+      <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+        <PlaceholderColumn title="Claude" colorClass="bg-primary" foregroundClass="text-primary-foreground" />
+        <PlaceholderColumn title="GPT" colorClass="bg-secondary" foregroundClass="text-secondary-foreground" />
+        <PlaceholderColumn title="Gemini" colorClass="bg-accent" foregroundClass="text-accent-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
       {availableKeys.anthropic ? (
         <ModelColumn
           modelKey="claude"
-          models={ANTHROPIC_MODELS}
+          models={availableModels.anthropic}
           colorClass="bg-primary"
           foregroundClass="text-primary-foreground"
           response={responses.claude}
@@ -59,7 +72,7 @@ export function ModelGrid({
       {availableKeys.openai ? (
         <ModelColumn
           modelKey="gpt"
-          models={OPENAI_MODELS}
+          models={availableModels.openai}
           colorClass="bg-secondary"
           foregroundClass="text-secondary-foreground"
           response={responses.gpt}
@@ -75,7 +88,7 @@ export function ModelGrid({
       {availableKeys.google ? (
         <ModelColumn
           modelKey="gemini"
-          models={GOOGLE_MODELS}
+          models={availableModels.google}
           colorClass="bg-accent"
           foregroundClass="text-accent-foreground"
           response={responses.gemini}

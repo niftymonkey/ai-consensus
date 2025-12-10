@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { X, Plus } from "lucide-react";
 import type { ModelSelection } from "@/lib/types";
-import { AVAILABLE_MODELS } from "@/lib/types";
+import type { ProviderModels } from "@/lib/models";
 
 interface ModelSelectorProps {
   availableKeys: {
@@ -13,6 +13,7 @@ interface ModelSelectorProps {
     openai: boolean;
     google: boolean;
   };
+  availableModels: ProviderModels;
   selectedModels: ModelSelection[];
   setSelectedModels: (models: ModelSelection[]) => void;
   disabled?: boolean;
@@ -20,6 +21,7 @@ interface ModelSelectorProps {
 
 export function ModelSelector({
   availableKeys,
+  availableModels,
   selectedModels,
   setSelectedModels,
   disabled = false,
@@ -35,11 +37,14 @@ export function ModelSelector({
 
     if (!provider) return;
 
+    const models = availableModels[provider];
+    if (models.length === 0) return;
+
     const newModel: ModelSelection = {
       id: `model-${selectedModels.length + 1}`,
       provider,
-      modelId: AVAILABLE_MODELS[provider][0].modelId,
-      label: AVAILABLE_MODELS[provider][0].label,
+      modelId: models[0].id,
+      label: models[0].name,
     };
 
     setSelectedModels([...selectedModels, newModel]);
@@ -59,11 +64,14 @@ export function ModelSelector({
 
         // If provider changed, reset modelId and label
         if (updates.provider && updates.provider !== m.provider) {
+          const models = availableModels[updates.provider];
+          if (models.length === 0) return m;
+
           return {
             ...m,
             provider: updates.provider,
-            modelId: AVAILABLE_MODELS[updates.provider][0].modelId,
-            label: AVAILABLE_MODELS[updates.provider][0].label,
+            modelId: models[0].id,
+            label: models[0].name,
           };
         }
 
@@ -112,13 +120,13 @@ export function ModelSelector({
               <Select
                 value={model.modelId}
                 onValueChange={(modelId) => {
-                  const selectedOption = AVAILABLE_MODELS[model.provider].find(
-                    (m) => m.modelId === modelId
+                  const selectedOption = availableModels[model.provider].find(
+                    (m) => m.id === modelId
                   );
                   if (selectedOption) {
                     updateModel(model.id, {
-                      modelId: selectedOption.modelId,
-                      label: selectedOption.label,
+                      modelId: selectedOption.id,
+                      label: selectedOption.name,
                     });
                   }
                 }}
@@ -128,9 +136,9 @@ export function ModelSelector({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {AVAILABLE_MODELS[model.provider].map((option) => (
-                    <SelectItem key={option.modelId} value={option.modelId}>
-                      {option.label}
+                  {availableModels[model.provider].map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
