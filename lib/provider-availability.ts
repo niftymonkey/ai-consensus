@@ -147,17 +147,17 @@ export async function checkProviderAvailability(keys: {
       ? getCachedOrFetch(`anthropic:${keys.anthropic.slice(-8)}`, () =>
           checkAnthropicModels(keys.anthropic!)
         )
-      : Promise.resolve({ available: [] }),
+      : Promise.resolve({ available: [] } as ProviderCheckResult),
     keys.openai
       ? getCachedOrFetch(`openai:${keys.openai.slice(-8)}`, () =>
           checkOpenAIModels(keys.openai!)
         )
-      : Promise.resolve({ available: [] }),
+      : Promise.resolve({ available: [] } as ProviderCheckResult),
     keys.google
       ? getCachedOrFetch(`google:${keys.google.slice(-8)}`, () =>
           checkGoogleModels(keys.google!)
         )
-      : Promise.resolve({ available: [] }),
+      : Promise.resolve({ available: [] } as ProviderCheckResult),
   ]);
 
   const errors: Record<string, string> = {};
