@@ -22,6 +22,7 @@ interface ConsensusRequest {
   models: [ModelSelection, ModelSelection] | [ModelSelection, ModelSelection, ModelSelection];
   maxRounds?: number;
   consensusThreshold?: number;
+  evaluatorModel?: string;
 }
 
 /**
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
       models,
       maxRounds = 3,
       consensusThreshold = 80,
+      evaluatorModel = "claude-3-7-sonnet-20250219",
     }: ConsensusRequest = await request.json();
 
     // Validate prompt
@@ -87,11 +89,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Determine evaluator (prefer Claude, fallback to OpenAI)
-    const evaluatorProvider: "anthropic" | "openai" = keys.anthropic
+    // Determine evaluator provider based on selected model
+    const evaluatorProvider: "anthropic" | "openai" = evaluatorModel.startsWith("claude")
       ? "anthropic"
       : "openai";
-    const evaluatorKey = keys.anthropic || keys.openai;
+    const evaluatorKey = keys[evaluatorProvider];
 
     if (!evaluatorKey) {
       return new Response(
@@ -166,27 +168,68 @@ export async function POST(request: NextRequest) {
               round: currentRound,
             });
 
-            // Evaluate consensus
-            const evaluation = await evaluateConsensusWithStream(
-              roundResponses,
-              models,
-              consensusThreshold,
-              evaluatorKey,
-              evaluatorProvider,
-              currentRound,
-              (partial) => {
-                // Stream partial evaluation updates to frontend
-                controller.enqueue(
-                  encoder.encode(
-                    JSON.stringify({
-                      type: "evaluation",
-                      data: partial,
-                      round: currentRound,
-                    }) + "\n"
-                  )
-                );
-              }
+            // Send evaluation start event
+            controller.enqueue(
+              encoder.encode(
+                JSON.stringify({
+                  type: "evaluation-start",
+                  round: currentRound,
+                }) + "\n"
+              )
             );
+
+            // Evaluate consensus with error handling
+            let evaluation;
+            try {
+              evaluation = await evaluateConsensusWithStream(
+                roundResponses,
+                models,
+                consensusThreshold,
+                evaluatorKey,
+                evaluatorProvider,
+                evaluatorModel,
+                currentRound,
+                (partial) => {
+                  // Stream partial evaluation updates to frontend
+                  controller.enqueue(
+                    encoder.encode(
+                      JSON.stringify({
+                        type: "evaluation",
+                        data: partial,
+                        round: currentRound,
+                      }) + "\n"
+                    )
+                  );
+                }
+              );
+
+              // Send evaluation complete event
+              controller.enqueue(
+                encoder.encode(
+                  JSON.stringify({
+                    type: "evaluation-complete",
+                    round: currentRound,
+                  }) + "\n"
+                )
+              );
+            } catch (error) {
+              console.error(`[Round ${currentRound}] Evaluation failed:`, error);
+
+              controller.enqueue(
+                encoder.encode(
+                  JSON.stringify({
+                    type: "error",
+                    data: {
+                      message: "Failed to evaluate consensus. Please try again.",
+                      round: currentRound,
+                      details: error instanceof Error ? error.message : 'Unknown error'
+                    },
+                  }) + "\n"
+                )
+              );
+
+              throw error; // Re-throw to hit outer catch
+            }
 
             finalScore = evaluation.score;
             // Fallback: Enforce isGoodEnough logic in case LLM makes a mistake
@@ -254,6 +297,7 @@ export async function POST(request: NextRequest) {
             selectedModels: models,
             providerInstances,
             evaluatorProvider,
+            evaluatorModel,
             onChunk: (chunk) => {
               finalSynthesis += chunk;
               controller.enqueue(
@@ -337,57 +381,90 @@ async function generateRoundResponses(opts: {
 }): Promise<Map<string, string>> {
   const responses = new Map<string, string>();
 
-  // Helper: stream and buffer single model response
+  // Helper: stream and buffer single model response with timeout
   async function streamAndBuffer(modelSelection: ModelSelection) {
     const provider = opts.providerInstances[modelSelection.provider];
-    if (!provider) return;
+    if (!provider) {
+      console.error(`Provider not found for ${modelSelection.id}`);
+      responses.set(modelSelection.id, `[Error: Provider not configured for ${modelSelection.label}]`);
+      return;
+    }
 
-    // Build prompt (initial or refinement)
-    const promptText = opts.prompt
-      ? opts.prompt // Round 1
-      : buildRefinementPrompt(
-          // Round 2+
-          opts.originalPrompt,
-          modelSelection.id,
-          modelSelection.label,
-          opts.previousResponses!.get(modelSelection.id) || "",
-          opts.previousResponses!,
-          opts.selectedModels,
-          opts.round
+    try {
+      // Build prompt (initial or refinement)
+      const promptText = opts.prompt
+        ? opts.prompt // Round 1
+        : buildRefinementPrompt(
+            // Round 2+
+            opts.originalPrompt,
+            modelSelection.id,
+            modelSelection.label,
+            opts.previousResponses!.get(modelSelection.id) || "",
+            opts.previousResponses!,
+            opts.selectedModels,
+            opts.round
+          );
+
+      const result = streamText({
+        model: provider(modelSelection.modelId),
+        prompt: promptText,
+      });
+
+      // Stream to frontend and buffer with timeout
+      let fullResponse = "";
+      const timeoutMs = 120000; // 120 seconds
+      const startTime = Date.now();
+
+      for await (const chunk of result.textStream) {
+        // Check timeout
+        if (Date.now() - startTime > timeoutMs) {
+          throw new Error(`Model ${modelSelection.label} timeout after 120s`);
+        }
+
+        fullResponse += chunk;
+
+        opts.controller.enqueue(
+          opts.encoder.encode(
+            JSON.stringify({
+              type: "model-response",
+              data: {
+                modelId: modelSelection.id,
+                modelLabel: modelSelection.label,
+                content: fullResponse,
+                round: opts.round,
+              },
+            }) + "\n"
+          )
         );
+      }
 
-    const result = streamText({
-      model: provider(modelSelection.modelId),
-      prompt: promptText,
-    });
+      // Buffer complete response for evaluation
+      responses.set(modelSelection.id, fullResponse);
+    } catch (error) {
+      console.error(`Model ${modelSelection.id} failed:`, error);
 
-    // Stream to frontend and buffer
-    let fullResponse = "";
-
-    for await (const chunk of result.textStream) {
-      fullResponse += chunk;
-
+      // Send error event to client
       opts.controller.enqueue(
         opts.encoder.encode(
           JSON.stringify({
-            type: "model-response",
+            type: "model-error",
             data: {
               modelId: modelSelection.id,
               modelLabel: modelSelection.label,
-              content: fullResponse,
+              error: error instanceof Error ? error.message : 'Unknown error',
               round: opts.round,
             },
           }) + "\n"
         )
       );
-    }
 
-    // Buffer complete response for evaluation
-    responses.set(modelSelection.id, fullResponse);
+      // Set placeholder response so consensus can continue with remaining models
+      responses.set(modelSelection.id, `[Error: ${modelSelection.label} did not respond]`);
+    }
   }
 
-  // Run all selected models in parallel (2 or 3)
-  await Promise.all(opts.selectedModels.map((model) => streamAndBuffer(model)));
+  // Run all selected models in parallel (2 or 3) with graceful failure handling
+  await Promise.allSettled(opts.selectedModels.map((model) => streamAndBuffer(model)));
 
   return responses;
 }
@@ -427,14 +504,12 @@ async function streamFinalSynthesis(opts: {
   selectedModels: ModelSelection[];
   providerInstances: Record<string, any>;
   evaluatorProvider: "anthropic" | "openai";
+  evaluatorModel: string;
   onChunk: (chunk: string) => void;
 }): Promise<void> {
   // Use evaluator provider for synthesis
   const thinkingProvider = opts.providerInstances[opts.evaluatorProvider];
-  const thinkingModel =
-    opts.evaluatorProvider === "anthropic"
-      ? "claude-3-7-sonnet-20250219"
-      : "gpt-4o";
+  const thinkingModel = opts.evaluatorModel;
 
   // Build synthesis prompt
   const responsesText = opts.selectedModels

@@ -3,12 +3,17 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { ProviderModels } from "@/lib/models";
 
 interface ConsensusSettingsProps {
   maxRounds: number;
   setMaxRounds: (value: number) => void;
   consensusThreshold: number;
   setConsensusThreshold: (value: number) => void;
+  evaluatorModel: string;
+  setEvaluatorModel: (value: string) => void;
+  availableModels: ProviderModels | null;
   disabled?: boolean;
 }
 
@@ -17,8 +22,29 @@ export function ConsensusSettings({
   setMaxRounds,
   consensusThreshold,
   setConsensusThreshold,
+  evaluatorModel,
+  setEvaluatorModel,
+  availableModels,
   disabled = false,
 }: ConsensusSettingsProps) {
+  // Filter out nano/mini/lite models - keep only evaluation-suitable models
+  const evaluatorModels = availableModels ? [
+    ...availableModels.anthropic.filter(m =>
+      !m.name.toLowerCase().includes('nano') &&
+      !m.name.toLowerCase().includes('mini') &&
+      !m.name.toLowerCase().includes('lite')
+    ),
+    ...availableModels.openai.filter(m =>
+      !m.name.toLowerCase().includes('nano') &&
+      !m.name.toLowerCase().includes('mini') &&
+      !m.name.toLowerCase().includes('lite')
+    ),
+    ...availableModels.google.filter(m =>
+      !m.name.toLowerCase().includes('nano') &&
+      !m.name.toLowerCase().includes('mini') &&
+      !m.name.toLowerCase().includes('lite')
+    ),
+  ] : [];
   return (
     <Card>
       <CardHeader>
@@ -67,6 +93,30 @@ export function ConsensusSettings({
           />
           <p className="text-xs text-muted-foreground">
             Consensus score must reach {consensusThreshold}% to stop early
+          </p>
+        </div>
+
+        {/* Evaluator Model */}
+        <div className="space-y-2">
+          <Label htmlFor="evaluator-model">Evaluator Model</Label>
+          <Select
+            value={evaluatorModel}
+            onValueChange={setEvaluatorModel}
+            disabled={disabled || evaluatorModels.length === 0}
+          >
+            <SelectTrigger id="evaluator-model">
+              <SelectValue placeholder="Select evaluator model" />
+            </SelectTrigger>
+            <SelectContent>
+              {evaluatorModels.map((model) => (
+                <SelectItem key={model.id} value={model.id}>
+                  {model.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            This model evaluates consensus and synthesizes the final response
           </p>
         </div>
       </CardContent>

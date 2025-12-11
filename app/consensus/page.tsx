@@ -10,6 +10,7 @@ import { RoundsPanel } from "@/components/consensus/rounds-panel";
 import { DualView } from "@/components/consensus/dual-view";
 import { ModelSelector } from "@/components/consensus/model-selector";
 import { useAvailableModels } from "@/hooks/use-available-models";
+import { Loader2 } from "lucide-react";
 import type {
   ModelSelection,
   RoundData,
@@ -33,6 +34,7 @@ export default function ConsensusPage() {
   // Settings
   const [maxRounds, setMaxRounds] = useState(3);
   const [consensusThreshold, setConsensusThreshold] = useState(80);
+  const [evaluatorModel, setEvaluatorModel] = useState("claude-3-7-sonnet-20250219");
 
   // Model selection (2-3 models)
   const [selectedModels, setSelectedModels] = useState<ModelSelection[]>([]);
@@ -46,11 +48,13 @@ export default function ConsensusPage() {
   const [finalResponses, setFinalResponses] = useState<Map<string, string> | null>(null);
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [overallStatus, setOverallStatus] = useState<string | null>(null);
 
   // Use refs to track latest values for event handling (avoids stale closures)
   const currentEvaluationRef = useRef<Partial<ConsensusEvaluation> | null>(null);
   const currentRoundResponsesRef = useRef<Map<string, string>>(new Map());
   const currentRoundRef = useRef<number>(0);
+  const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize default models when available models are loaded
   useEffect(() => {
@@ -82,6 +86,37 @@ export default function ConsensusPage() {
     }
   }, [availableModels, selectedModels.length]);
 
+  // Initialize default evaluator model when available models are loaded
+  useEffect(() => {
+    if (availableModels && evaluatorModel === "claude-3-7-sonnet-20250219") {
+      // Filter evaluation-suitable models (exclude nano/mini/lite)
+      const suitableModels = [
+        ...availableModels.openai.filter(m =>
+          !m.name.toLowerCase().includes('nano') &&
+          !m.name.toLowerCase().includes('mini') &&
+          !m.name.toLowerCase().includes('lite')
+        ),
+        ...availableModels.anthropic.filter(m =>
+          !m.name.toLowerCase().includes('nano') &&
+          !m.name.toLowerCase().includes('mini') &&
+          !m.name.toLowerCase().includes('lite')
+        ),
+      ];
+
+      // Prefer gpt-5-chat-latest, fallback to claude-3-7-sonnet-20250219 or first available
+      const gpt5 = suitableModels.find(m => m.id === "gpt-5-chat-latest");
+      const claude37 = suitableModels.find(m => m.id === "claude-3-7-sonnet-20250219");
+
+      if (gpt5) {
+        setEvaluatorModel(gpt5.id);
+      } else if (claude37) {
+        setEvaluatorModel(claude37.id);
+      } else if (suitableModels.length > 0) {
+        setEvaluatorModel(suitableModels[0].id);
+      }
+    }
+  }, [availableModels]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -99,6 +134,17 @@ export default function ConsensusPage() {
     setFinalConsensus(null);
     setFinalResponses(null);
     setIsSynthesizing(false);
+    setOverallStatus(null);
+
+    // Set client-side timeout safeguard (90 seconds)
+    timeoutIdRef.current = setTimeout(() => {
+      if (isProcessing || isSynthesizing) {
+        alert("The consensus evaluation is taking too long. Please try again.");
+        setIsProcessing(false);
+        setIsSynthesizing(false);
+        setOverallStatus(null);
+      }
+    }, 90000);
 
     try {
       const response = await fetch("/api/consensus", {
@@ -109,6 +155,7 @@ export default function ConsensusPage() {
           models: selectedModels,
           maxRounds,
           consensusThreshold,
+          evaluatorModel,
         }),
       });
 
@@ -166,6 +213,11 @@ export default function ConsensusPage() {
       alert(error.message || "An error occurred");
     } finally {
       setIsProcessing(false);
+      // Clear timeout when processing completes
+      if (timeoutIdRef.current) {
+        clearTimeout(timeoutIdRef.current);
+        timeoutIdRef.current = null;
+      }
     }
   }
 
@@ -173,6 +225,7 @@ export default function ConsensusPage() {
     switch (event.type) {
       case "start":
         setConversationId(event.conversationId);
+        setOverallStatus("Starting consensus generation...");
         break;
 
       case "round-status":
@@ -182,6 +235,7 @@ export default function ConsensusPage() {
         currentRoundResponsesRef.current = new Map();
         setCurrentEvaluation(null);
         currentEvaluationRef.current = null;
+        setOverallStatus(`Round ${event.data.roundNumber}: ${event.data.status}`);
         break;
 
       case "model-response":
@@ -191,6 +245,8 @@ export default function ConsensusPage() {
           currentRoundResponsesRef.current = updated;
           return updated;
         });
+        // Update status to show which model is responding
+        setOverallStatus(`Round ${event.data.round}: Receiving responses from models...`);
         break;
 
       case "evaluation": {
@@ -272,22 +328,43 @@ export default function ConsensusPage() {
         }
         setIsSynthesizing(true);
         setFinalConsensus("");
+        setOverallStatus("Synthesizing final consensus response...");
         break;
 
       case "synthesis-chunk":
         setFinalConsensus((prev) => (prev || "") + event.content);
+        setOverallStatus("Generating final consensus...");
         break;
 
       case "final-responses":
         setFinalResponses(new Map(Object.entries(event.data)));
+        setOverallStatus("Finalizing results...");
+        break;
+
+      case "evaluation-start":
+        setOverallStatus(`Round ${event.round}: Evaluating consensus...`);
+        break;
+
+      case "evaluation-complete":
+        setOverallStatus(`Round ${event.round}: Evaluation complete`);
+        break;
+
+      case "model-error":
+        console.warn(`Model error: ${event.data.modelLabel}`, event.data.error);
+        alert(`${event.data.modelLabel} failed to respond. Continuing with other models.`);
         break;
 
       case "complete":
+        setOverallStatus("Complete!");
+        setTimeout(() => setOverallStatus(null), 2000); // Clear after 2 seconds
         break;
 
       case "error":
-        console.error("Stream error:", event.error);
-        alert(event.error);
+        console.error("Consensus error:", event.data);
+        alert(event.data?.message || "An error occurred during consensus generation");
+        setIsProcessing(false);
+        setIsSynthesizing(false);
+        setOverallStatus(null);
         break;
     }
   }
@@ -321,6 +398,18 @@ export default function ConsensusPage() {
   return (
     <div className="container py-12">
       <div className="space-y-10">
+        {/* Overall Status Indicator */}
+        {overallStatus && (
+          <div className="mx-auto w-full max-w-[80%]">
+            <div className="flex items-center justify-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-6 py-4 dark:border-blue-900 dark:bg-blue-950/20">
+              <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" />
+              <span className="text-base font-medium text-blue-900 dark:text-blue-100">
+                {overallStatus}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Input */}
         <div className="mx-auto w-full max-w-[80%]">
           <ChatInput
@@ -350,6 +439,9 @@ export default function ConsensusPage() {
             setMaxRounds={setMaxRounds}
             consensusThreshold={consensusThreshold}
             setConsensusThreshold={setConsensusThreshold}
+            evaluatorModel={evaluatorModel}
+            setEvaluatorModel={setEvaluatorModel}
+            availableModels={availableModels}
             disabled={isProcessing}
           />
         </div>
