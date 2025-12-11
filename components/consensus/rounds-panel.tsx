@@ -274,40 +274,40 @@ export function RoundsPanel({
                 {/* Evaluation Section - FUN VERSION (only show if we have evaluation data) */}
                 {round.evaluation && round.evaluation.score !== undefined && round.evaluation.score !== null && (
                   <div className="space-y-4">
-                    {/* Top Section: Compact Hero (left) + Differences (right) */}
-                    <div className="flex gap-4">
-                    {/* Left: Compact Score Hero - Fixed Square */}
-                    <div className={`w-44 h-44 rounded-xl border-2 transition-all flex-shrink-0 flex items-center justify-center ${getVibeStyling(round.evaluation.vibe || getVibeFromScore(round.evaluation.score))}`}>
-                      <div className="flex flex-col items-center gap-2 text-center">
-                        {/* Giant Emoji */}
-                        <div className="text-5xl leading-none" role="img" aria-label="consensus indicator">
-                          {round.evaluation.emoji || getEmojiFromScore(round.evaluation.score)}
-                        </div>
-
-                        {/* Score */}
-                        <div className={`text-3xl font-bold leading-none ${getScoreColor(round.evaluation.score)}`}>
-                          {round.evaluation.score}%
-                        </div>
-
-                        {/* Vibe Badge */}
-                        <Badge
-                          variant={round.evaluation.score >= consensusThreshold ? "default" : "destructive"}
-                          className="text-xs whitespace-nowrap"
-                        >
-                          {getVibeDisplayLabel(round.evaluation.vibe || getVibeFromScore(round.evaluation.score))}
-                        </Badge>
-
-                        {round.evaluation.isGoodEnough && (
-                          <Badge className="bg-green-500 hover:bg-green-600 text-white text-xs whitespace-nowrap">
-                            We did it!
-                          </Badge>
-                        )}
-                      </div>
+                  {/* Punchy Summary - Full Width */}
+                  {round.evaluation.summary && (
+                    <div className="p-4 bg-muted/30 rounded-lg border">
+                      <p className="text-base font-medium italic">
+                        {round.evaluation.summary}
+                      </p>
                     </div>
+                  )}
+
+                  {/* Two Column Layout: Agreements (left) + Differences (right) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Left: Areas of Agreement */}
+                    {round.evaluation.areasOfAgreement && round.evaluation.areasOfAgreement.length > 0 && (
+                      <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-900">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-lg">✅</span>
+                          <span className="font-semibold text-green-900 dark:text-green-100">
+                            What They Agree On
+                          </span>
+                        </div>
+                        <ul className="space-y-1">
+                          {round.evaluation.areasOfAgreement.map((agreement, i) => (
+                            <li key={i} className="text-sm text-green-800 dark:text-green-200 flex gap-2">
+                              <span>•</span>
+                              <span>{agreement}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
 
                     {/* Right: Key Differences - With Drama! */}
                     {round.evaluation.keyDifferences.length > 0 && (
-                      <div className={`p-4 rounded-lg flex-1 ${getDifferenceStyling(round.evaluation.score)}`}>
+                      <div className={`p-4 rounded-lg ${getDifferenceStyling(round.evaluation.score)}`}>
                         <div className="flex items-center gap-2 mb-3">
                           <span className="text-lg">{getDifferenceIcon(round.evaluation.score)}</span>
                           <span className="font-semibold">
@@ -325,35 +325,6 @@ export function RoundsPanel({
                       </div>
                     )}
                   </div>
-
-                  {/* Punchy Summary - Full Width */}
-                  {round.evaluation.summary && (
-                    <div className="p-4 bg-muted/30 rounded-lg border">
-                      <p className="text-base font-medium italic">
-                        {round.evaluation.summary}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Areas of Agreement - Full Width */}
-                  {round.evaluation.areasOfAgreement && round.evaluation.areasOfAgreement.length > 0 && (
-                    <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-900">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-lg">✅</span>
-                        <span className="font-semibold text-green-900 dark:text-green-100">
-                          What They Agree On
-                        </span>
-                      </div>
-                      <ul className="space-y-1">
-                        {round.evaluation.areasOfAgreement.map((agreement, i) => (
-                          <li key={i} className="text-sm text-green-800 dark:text-green-200 flex gap-2">
-                            <span>•</span>
-                            <span>{agreement}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
 
                   {/* Collapsible Detailed Reasoning */}
                   {round.evaluation.reasoning && (
