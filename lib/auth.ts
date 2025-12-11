@@ -14,6 +14,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       clientSecret: process.env.DISCORD_CLIENT_SECRET!,
     }),
   ],
+  pages: {
+    signIn: "/signin",
+  },
   callbacks: {
     async signIn({ user, account, profile }) {
       if (!user.email) {
