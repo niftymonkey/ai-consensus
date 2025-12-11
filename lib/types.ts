@@ -63,10 +63,21 @@ export type ConsensusStreamEvent =
         round: number;
       };
     }
+  | { type: "evaluation-start"; round: number }
   | { type: "evaluation"; data: Partial<ConsensusEvaluation>; round: number }
+  | { type: "evaluation-complete"; round: number }
+  | {
+      type: "model-error";
+      data: {
+        modelId: string;
+        modelLabel: string;
+        error: string;
+        round: number;
+      };
+    }
   | { type: "refinement-prompts"; data: Record<string, string>; round: number }
   | { type: "synthesis-start" }
   | { type: "synthesis-chunk"; content: string }
   | { type: "final-responses"; data: Record<string, string> }
   | { type: "complete" }
-  | { type: "error"; error: string };
+  | { type: "error"; data: { message: string; round: number; details: string } };

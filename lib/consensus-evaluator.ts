@@ -59,6 +59,7 @@ export async function evaluateConsensusWithStream(
   consensusThreshold: number,
   evaluatorApiKey: string,
   evaluatorProvider: "anthropic" | "openai",
+  evaluatorModel: string,
   round: number,
   onPartialUpdate?: (partial: Partial<ConsensusEvaluation>) => void
 ): Promise<ConsensusEvaluation> {
@@ -68,11 +69,8 @@ export async function evaluateConsensusWithStream(
       ? createAnthropic({ apiKey: evaluatorApiKey })
       : createOpenAI({ apiKey: evaluatorApiKey });
 
-  // Choose model based on provider
-  const modelId =
-    evaluatorProvider === "anthropic"
-      ? "claude-3-7-sonnet-20250219"
-      : "gpt-4o";
+  // Use provided evaluator model
+  const modelId = evaluatorModel;
 
   // streamObject returns structured data incrementally
   const result = streamObject({
@@ -84,26 +82,42 @@ export async function evaluateConsensusWithStream(
 
   // Stream partial object updates
   if (onPartialUpdate) {
-    for await (const partialObject of result.partialObjectStream) {
-      onPartialUpdate({
-        score: partialObject.score ?? 0,
-        summary: partialObject.summary ?? "",
-        emoji: partialObject.emoji ?? "🤔",
-        vibe: partialObject.vibe ?? "mixed",
-        areasOfAgreement: Array.isArray(partialObject.areasOfAgreement)
-          ? partialObject.areasOfAgreement.filter((a): a is string => a !== undefined)
-          : [],
-        keyDifferences: Array.isArray(partialObject.keyDifferences)
-          ? partialObject.keyDifferences.filter((d): d is string => d !== undefined)
-          : [],
-        reasoning: partialObject.reasoning ?? "",
-        isGoodEnough: partialObject.isGoodEnough ?? false,
-      });
+    try {
+      for await (const partialObject of result.partialObjectStream) {
+        onPartialUpdate({
+          score: partialObject.score ?? 0,
+          summary: partialObject.summary ?? "",
+          emoji: partialObject.emoji ?? "🤔",
+          vibe: partialObject.vibe ?? "mixed",
+          areasOfAgreement: Array.isArray(partialObject.areasOfAgreement)
+            ? partialObject.areasOfAgreement.filter((a): a is string => a !== undefined)
+            : [],
+          keyDifferences: Array.isArray(partialObject.keyDifferences)
+            ? partialObject.keyDifferences.filter((d): d is string => d !== undefined)
+            : [],
+          reasoning: partialObject.reasoning ?? "",
+          isGoodEnough: partialObject.isGoodEnough ?? false,
+        });
+      }
+    } catch (error) {
+      console.error('[Evaluation Stream] Partial stream error:', error);
+      // Continue to result.object - it may still resolve
     }
   }
 
-  // Return final structured object (guaranteed to match schema)
-  return await result.object;
+  // Return final structured object with timeout
+  try {
+    const finalObject = await Promise.race([
+      result.object,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Evaluation timeout after 60s')), 60000)
+      )
+    ]);
+    return finalObject;
+  } catch (error) {
+    console.error('[Evaluation] Failed to get final object:', error);
+    throw new Error(`Evaluation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }
 
 /**
@@ -115,6 +129,7 @@ export async function evaluateConsensus(
   consensusThreshold: number,
   evaluatorApiKey: string,
   evaluatorProvider: "anthropic" | "openai",
+  evaluatorModel: string,
   round: number
 ): Promise<ConsensusEvaluation> {
   return evaluateConsensusWithStream(
@@ -123,6 +138,7 @@ export async function evaluateConsensus(
     consensusThreshold,
     evaluatorApiKey,
     evaluatorProvider,
+    evaluatorModel,
     round
   );
 }
