@@ -331,7 +331,7 @@ export function RoundsPanel({
                     <Accordion
                       type="single"
                       collapsible
-                      value={expandedSections.detailedAnalysis ? "reasoning" : undefined}
+                      value={expandedSections.detailedAnalysis ? "reasoning" : ""}
                       onValueChange={(value) => setExpandedSections(prev => ({
                         ...prev,
                         detailedAnalysis: value === "reasoning"
@@ -384,7 +384,7 @@ export function RoundsPanel({
                 <Accordion
                   type="single"
                   collapsible
-                  value={expandedSections.modelResponses ? "responses" : undefined}
+                  value={expandedSections.modelResponses ? "responses" : ""}
                   onValueChange={(value) => setExpandedSections(prev => ({
                     ...prev,
                     modelResponses: value === "responses"
@@ -454,7 +454,7 @@ export function RoundsPanel({
                   <Accordion
                     type="single"
                     collapsible
-                    value={expandedSections.refinementPrompts ? "refinement" : undefined}
+                    value={expandedSections.refinementPrompts ? "refinement" : ""}
                     onValueChange={(value) => setExpandedSections(prev => ({
                       ...prev,
                       refinementPrompts: value === "refinement"
