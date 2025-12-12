@@ -528,7 +528,7 @@ async function streamFinalSynthesis(opts: {
   finalResponses: Map<string, string>;
   selectedModels: ModelSelection[];
   providerInstances: Record<string, any>;
-  evaluatorProvider: "anthropic" | "openai";
+  evaluatorProvider: "anthropic" | "openai" | "google";
   evaluatorModel: string;
   onChunk: (chunk: string) => void;
 }): Promise<void> {

@@ -53,9 +53,9 @@ export function ConsensusSettings({
     }),
   ] : [];
 
-  // Separate recommended from other models
-  const recommendedModels = evaluatorModels.filter(m => m.recommended);
-  const otherModels = evaluatorModels.filter(m => !m.recommended);
+  // Separate recommended from other models and sort alphabetically
+  const recommendedModels = evaluatorModels.filter(m => m.recommended).sort((a, b) => a.name.localeCompare(b.name));
+  const otherModels = evaluatorModels.filter(m => !m.recommended).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <Card>

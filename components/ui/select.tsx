@@ -132,7 +132,9 @@ const SelectItem = React.forwardRef<
         <Check className="h-4 w-4" />
       </SelectPrimitive.ItemIndicator>
     </span>
-    <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+    <SelectPrimitive.ItemText>
+      {(description || metadata) ? <span className="font-semibold">{children}</span> : children}
+    </SelectPrimitive.ItemText>
     {description && (
       <span className="text-xs text-foreground/70 leading-snug mt-0.5 ml-2 italic">
         {description}

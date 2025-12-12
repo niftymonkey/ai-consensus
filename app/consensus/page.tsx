@@ -90,27 +90,35 @@ export default function ConsensusPage() {
   useEffect(() => {
     if (availableModels && evaluatorModel === "claude-3-7-sonnet-20250219") {
       // Filter evaluation-suitable models (exclude nano/mini/lite)
+      const filterModels = (models: typeof availableModels.anthropic) => {
+        return models.filter(m => {
+          const lower = m.name.toLowerCase();
+          return !lower.includes('nano') &&
+                 !lower.includes(' mini') &&
+                 !lower.includes('-mini') &&
+                 !lower.includes('lite');
+        });
+      };
+
       const suitableModels = [
-        ...availableModels.openai.filter(m =>
-          !m.name.toLowerCase().includes('nano') &&
-          !m.name.toLowerCase().includes('mini') &&
-          !m.name.toLowerCase().includes('lite')
-        ),
-        ...availableModels.anthropic.filter(m =>
-          !m.name.toLowerCase().includes('nano') &&
-          !m.name.toLowerCase().includes('mini') &&
-          !m.name.toLowerCase().includes('lite')
-        ),
+        ...filterModels(availableModels.anthropic),
+        ...filterModels(availableModels.openai),
+        ...filterModels(availableModels.google),
       ];
 
-      // Prefer gpt-5-chat-latest, fallback to claude-3-7-sonnet-20250219 or first available
-      const gpt5 = suitableModels.find(m => m.id === "gpt-5-chat-latest");
-      const claude37 = suitableModels.find(m => m.id === "claude-3-7-sonnet-20250219");
+      // 1. Try recommended models first
+      const recommended = suitableModels.find(m => m.recommended);
 
-      if (gpt5) {
-        setEvaluatorModel(gpt5.id);
-      } else if (claude37) {
-        setEvaluatorModel(claude37.id);
+      // 2. Fall back to budget OpenAI models
+      const budgetOpenAI = suitableModels.find(m =>
+        m.provider === 'openai' && m.costTier === 'budget'
+      );
+
+      // 3. Otherwise use first suitable model
+      if (recommended) {
+        setEvaluatorModel(recommended.id);
+      } else if (budgetOpenAI) {
+        setEvaluatorModel(budgetOpenAI.id);
       } else if (suitableModels.length > 0) {
         setEvaluatorModel(suitableModels[0].id);
       }
