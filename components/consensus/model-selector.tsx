@@ -136,11 +136,32 @@ export function ModelSelector({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableModels[model.provider].map((option) => (
-                    <SelectItem key={option.id} value={option.id}>
-                      {option.name}
-                    </SelectItem>
-                  ))}
+                  {availableModels[model.provider].map((option) => {
+                    const isFree = option.pricing?.input === 0 && option.pricing?.output === 0;
+                    const pricingText = isFree
+                      ? 'Free ⭐'
+                      : option.pricing
+                        ? `$${option.pricing.input}/$${option.pricing.output} per 1M`
+                        : null;
+
+                    const metaParts = [
+                      option.speed ? option.speed.charAt(0).toUpperCase() + option.speed.slice(1) : null,
+                      option.costTier ? option.costTier.charAt(0).toUpperCase() + option.costTier.slice(1) : null,
+                      option.contextWindow ? `${option.contextWindow >= 1000000 ? (option.contextWindow / 1000000).toFixed(1).replace('.0', '') + 'M' : (option.contextWindow / 1000).toFixed(0) + 'K'} context` : null,
+                      pricingText,
+                    ].filter(Boolean).join(' • ');
+
+                    return (
+                      <SelectItem
+                        key={option.id}
+                        value={option.id}
+                        description={option.description}
+                        metadata={metaParts}
+                      >
+                        {option.name}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>

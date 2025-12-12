@@ -63,6 +63,13 @@ export async function POST(request: NextRequest) {
     // Get user's API keys
     const keys = await getApiKeys(session.user.id);
 
+    // Log request
+    console.log('=== Consensus API Request ===');
+    console.log('Models:', models.map(m => `${m.provider}:${m.modelId}`));
+    console.log('Evaluator:', evaluatorModel);
+    console.log('Max rounds:', maxRounds);
+    console.log('Threshold:', consensusThreshold);
+
     // Create provider instances based on available keys
     const providerInstances = {
       anthropic: keys.anthropic
@@ -90,15 +97,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Determine evaluator provider based on selected model
-    const evaluatorProvider: "anthropic" | "openai" = evaluatorModel.startsWith("claude")
-      ? "anthropic"
-      : "openai";
+    const evaluatorProvider: "anthropic" | "openai" | "google" =
+      evaluatorModel.startsWith("claude")
+        ? "anthropic"
+        : evaluatorModel.startsWith("gemini")
+          ? "google"
+          : "openai";
     const evaluatorKey = keys[evaluatorProvider];
 
     if (!evaluatorKey) {
       return new Response(
         JSON.stringify({
-          error: "Need at least one API key (Anthropic or OpenAI) for evaluation",
+          error: `Missing API key for evaluator provider: ${evaluatorProvider}`,
         }),
         {
           status: 400,
@@ -181,6 +191,8 @@ export async function POST(request: NextRequest) {
             // Evaluate consensus with error handling
             let evaluation;
             try {
+              console.log(`[Round ${currentRound}] Starting consensus evaluation with ${evaluatorProvider}:${evaluatorModel}`);
+
               evaluation = await evaluateConsensusWithStream(
                 roundResponses,
                 models,
@@ -202,6 +214,8 @@ export async function POST(request: NextRequest) {
                   );
                 }
               );
+
+              console.log(`[Round ${currentRound}] Consensus evaluation received - Score: ${evaluation.score}%, isGoodEnough: ${evaluation.isGoodEnough}`);
 
               // Send evaluation complete event
               controller.enqueue(
@@ -290,6 +304,8 @@ export async function POST(request: NextRequest) {
             )
           );
 
+          console.log(`[Synthesis] Starting final synthesis with ${evaluatorProvider}:${evaluatorModel}`);
+
           let finalSynthesis = "";
           await streamFinalSynthesis({
             originalPrompt: prompt,
@@ -310,6 +326,8 @@ export async function POST(request: NextRequest) {
               );
             },
           });
+
+          console.log(`[Synthesis] Final synthesis received (${finalSynthesis.length} chars)`);
 
           // Update database with final result
           await updateConversationResult(
@@ -390,6 +408,8 @@ async function generateRoundResponses(opts: {
       return;
     }
 
+    console.log(`[Model Call] Round ${opts.round}: Calling ${modelSelection.provider}:${modelSelection.modelId} (${modelSelection.label})`);
+
     try {
       // Build prompt (initial or refinement)
       const promptText = opts.prompt
@@ -466,6 +486,11 @@ async function generateRoundResponses(opts: {
   // Run all selected models in parallel (2 or 3) with graceful failure handling
   await Promise.allSettled(opts.selectedModels.map((model) => streamAndBuffer(model)));
 
+  console.log(`[Round ${opts.round}] All model responses received`);
+  console.log(`[Round ${opts.round}] Response lengths:`, Object.fromEntries(
+    Array.from(responses.entries()).map(([id, text]) => [id, `${text.length} chars`])
+  ));
+
   return responses;
 }
 
@@ -503,7 +528,7 @@ async function streamFinalSynthesis(opts: {
   finalResponses: Map<string, string>;
   selectedModels: ModelSelection[];
   providerInstances: Record<string, any>;
-  evaluatorProvider: "anthropic" | "openai";
+  evaluatorProvider: "anthropic" | "openai" | "google";
   evaluatorModel: string;
   onChunk: (chunk: string) => void;
 }): Promise<void> {

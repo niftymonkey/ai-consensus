@@ -113,12 +113,16 @@ SelectLabel.displayName = SelectPrimitive.Label.displayName
 
 const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & {
+    description?: string;
+    metadata?: string;
+  }
+>(({ className, children, description, metadata, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
       "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      (description || metadata) && "flex-col items-start py-2",
       className
     )}
     {...props}
@@ -128,7 +132,19 @@ const SelectItem = React.forwardRef<
         <Check className="h-4 w-4" />
       </SelectPrimitive.ItemIndicator>
     </span>
-    <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+    <SelectPrimitive.ItemText>
+      {(description || metadata) ? <span className="font-semibold">{children}</span> : children}
+    </SelectPrimitive.ItemText>
+    {description && (
+      <span className="text-xs text-foreground/70 leading-snug mt-0.5 ml-2 italic">
+        {description}
+      </span>
+    )}
+    {metadata && (
+      <span className="text-xs text-foreground/50 mt-1 ml-2">
+        {metadata}
+      </span>
+    )}
   </SelectPrimitive.Item>
 ))
 SelectItem.displayName = SelectPrimitive.Item.displayName
