@@ -1,6 +1,7 @@
 import { streamObject } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
 import {
   buildEvaluationSystemPrompt,
@@ -58,7 +59,7 @@ export async function evaluateConsensusWithStream(
   selectedModels: ModelSelection[],
   consensusThreshold: number,
   evaluatorApiKey: string,
-  evaluatorProvider: "anthropic" | "openai",
+  evaluatorProvider: "anthropic" | "openai" | "google",
   evaluatorModel: string,
   round: number,
   onPartialUpdate?: (partial: Partial<ConsensusEvaluation>) => void
@@ -67,7 +68,9 @@ export async function evaluateConsensusWithStream(
   const provider =
     evaluatorProvider === "anthropic"
       ? createAnthropic({ apiKey: evaluatorApiKey })
-      : createOpenAI({ apiKey: evaluatorApiKey });
+      : evaluatorProvider === "google"
+        ? createGoogleGenerativeAI({ apiKey: evaluatorApiKey })
+        : createOpenAI({ apiKey: evaluatorApiKey });
 
   // Use provided evaluator model
   const modelId = evaluatorModel;
@@ -128,7 +131,7 @@ export async function evaluateConsensus(
   selectedModels: ModelSelection[],
   consensusThreshold: number,
   evaluatorApiKey: string,
-  evaluatorProvider: "anthropic" | "openai",
+  evaluatorProvider: "anthropic" | "openai" | "google",
   evaluatorModel: string,
   round: number
 ): Promise<ConsensusEvaluation> {

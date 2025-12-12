@@ -37,7 +37,7 @@ export async function GET() {
     // Helper function to filter models based on availability
     const filterModels = (
       provider: "anthropic" | "openai" | "google",
-      allModels: readonly { id: string; name: string }[]
+      allModels: readonly any[]
     ) => {
       // If no API key for this provider, return empty array
       if (!hasKeys[provider]) {
@@ -48,18 +48,18 @@ export async function GET() {
 
       // If API check failed or returned empty, show all models (fail-open)
       if (availableIds.length === 0 && !availability.errors[provider]) {
-        return allModels.map((m) => ({ id: m.id, name: m.name, provider }));
+        return allModels.map((m) => ({ ...m, provider }));
       }
 
       // If we got an error, show all models as fallback
       if (availability.errors[provider]) {
-        return allModels.map((m) => ({ id: m.id, name: m.name, provider }));
+        return allModels.map((m) => ({ ...m, provider }));
       }
 
       // Filter to only available models
       return allModels
         .filter((model) => availableIds.includes(model.id))
-        .map((m) => ({ id: m.id, name: m.name, provider }));
+        .map((m) => ({ ...m, provider }));
     };
 
     const response = {

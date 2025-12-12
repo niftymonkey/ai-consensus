@@ -126,6 +126,13 @@ export default function ConsensusPage() {
       return;
     }
 
+    // Log models being used
+    console.log('=== Starting Consensus Evaluation ===');
+    console.log('Selected models:', selectedModels.map(m => `${m.provider}:${m.modelId} (${m.label})`));
+    console.log('Evaluator model:', evaluatorModel);
+    console.log('Max rounds:', maxRounds);
+    console.log('Consensus threshold:', consensusThreshold + '%');
+
     setIsProcessing(true);
     setRounds([]);
     setCurrentRound(0);
