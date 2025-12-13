@@ -46,8 +46,10 @@ export default function ConsensusPage() {
   const [currentEvaluation, setCurrentEvaluation] = useState<Partial<ConsensusEvaluation> | null>(null);
   const [finalConsensus, setFinalConsensus] = useState<string | null>(null);
   const [finalResponses, setFinalResponses] = useState<Map<string, string> | null>(null);
+  const [progressionSummary, setProgressionSummary] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [isGeneratingProgression, setIsGeneratingProgression] = useState(false);
   const [overallStatus, setOverallStatus] = useState<string | null>(null);
 
   // Use refs to track latest values for event handling (avoids stale closures)
@@ -148,7 +150,9 @@ export default function ConsensusPage() {
     setCurrentEvaluation(null);
     setFinalConsensus(null);
     setFinalResponses(null);
+    setProgressionSummary(null);
     setIsSynthesizing(false);
+    setIsGeneratingProgression(false);
     setOverallStatus(null);
 
     // Set client-side timeout safeguard (90 seconds)
@@ -351,6 +355,17 @@ export default function ConsensusPage() {
         setOverallStatus("Generating final consensus...");
         break;
 
+      case "progression-summary-start":
+        setIsGeneratingProgression(true);
+        setProgressionSummary("");
+        setOverallStatus("Analyzing how consensus evolved...");
+        break;
+
+      case "progression-summary-chunk":
+        setProgressionSummary((prev) => (prev || "") + event.content);
+        setOverallStatus("Generating progression summary...");
+        break;
+
       case "final-responses":
         setFinalResponses(new Map(Object.entries(event.data)));
         setOverallStatus("Finalizing results...");
@@ -379,6 +394,7 @@ export default function ConsensusPage() {
         alert(event.data?.message || "An error occurred during consensus generation");
         setIsProcessing(false);
         setIsSynthesizing(false);
+        setIsGeneratingProgression(false);
         setOverallStatus(null);
         break;
     }
@@ -483,6 +499,8 @@ export default function ConsensusPage() {
             finalResponses={finalResponses}
             selectedModels={selectedModels}
             isStreaming={isProcessing}
+            progressionSummary={progressionSummary}
+            isGeneratingProgression={isGeneratingProgression}
           />
         )}
       </div>
