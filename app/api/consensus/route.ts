@@ -640,15 +640,19 @@ async function streamProgressionSummary(opts: {
   const RESPONSE_EXCERPT_LENGTH = 300;
 
   // Build progression summary prompt
-  const roundsSummaryText = opts.roundsData
-    .map((roundData) => {
-      const responsesText = opts.selectedModels
-        .map((m) => {
-          return `  - **${m.label}**: ${roundData.responses.get(m.id)?.substring(0, RESPONSE_EXCERPT_LENGTH)}...`;
-        })
-        .join("\n");
+  // Helper to format round data for the prompt
+  const formatRoundData = (roundData: typeof opts.roundsData[0]): string => {
+    const responsesText = opts.selectedModels
+      .map((m) => {
+        const response = roundData.responses.get(m.id) || "";
+        const excerpt = response.length > RESPONSE_EXCERPT_LENGTH 
+          ? `${response.substring(0, RESPONSE_EXCERPT_LENGTH)}...`
+          : response;
+        return `  - **${m.label}**: ${excerpt}`;
+      })
+      .join("\n");
 
-      return `**Round ${roundData.round}**:
+    return `**Round ${roundData.round}**:
 - Consensus Score: ${roundData.evaluation.score}%
 - Summary: ${roundData.evaluation.summary}
 - Areas of Agreement: ${roundData.evaluation.areasOfAgreement?.join(", ") || "N/A"}
@@ -656,7 +660,10 @@ async function streamProgressionSummary(opts: {
 
 Model Responses (excerpts):
 ${responsesText}`;
-    })
+  };
+
+  const roundsSummaryText = opts.roundsData
+    .map(formatRoundData)
     .join("\n\n---\n\n");
 
   const progressionPrompt = `You are analyzing how AI models evolved their perspectives across multiple rounds of consensus-building.
@@ -681,13 +688,21 @@ Write in an engaging, conversational tone (similar to the round summaries' vibe)
 
 Generate the progression summary:`;
 
-  const progressionResult = streamText({
-    model: thinkingProvider(thinkingModel),
-    prompt: progressionPrompt,
-  });
+  try {
+    const progressionResult = streamText({
+      model: thinkingProvider(thinkingModel),
+      prompt: progressionPrompt,
+    });
 
-  // Stream chunks
-  for await (const chunk of progressionResult.textStream) {
-    opts.onChunk(chunk);
+    // Stream chunks
+    for await (const chunk of progressionResult.textStream) {
+      opts.onChunk(chunk);
+    }
+  } catch (error) {
+    console.error('[Progression Summary] Failed to generate:', error);
+    // Provide a fallback message if generation fails
+    opts.onChunk(
+      `Unable to generate progression summary at this time. The consensus evolved across ${opts.roundsData.length} rounds.`
+    );
   }
 }
