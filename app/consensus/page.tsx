@@ -155,15 +155,17 @@ export default function ConsensusPage() {
     setIsGeneratingProgression(false);
     setOverallStatus(null);
 
-    // Set client-side timeout safeguard (90 seconds)
+    // Set client-side timeout safeguard (5 minutes - matches API maxDuration)
+    // This is the last-resort failsafe; individual operations have their own timeouts
     timeoutIdRef.current = setTimeout(() => {
-      if (isProcessing || isSynthesizing) {
+      if (isProcessing || isSynthesizing || isGeneratingProgression) {
         alert("The consensus evaluation is taking too long. Please try again.");
         setIsProcessing(false);
         setIsSynthesizing(false);
+        setIsGeneratingProgression(false);
         setOverallStatus(null);
       }
-    }, 90000);
+    }, 300000);
 
     try {
       const response = await fetch("/api/consensus", {
@@ -447,7 +449,7 @@ export default function ConsensusPage() {
           <ChatInput
             prompt={prompt}
             setPrompt={setPrompt}
-            isLoading={isProcessing}
+            isLoading={isProcessing || isSynthesizing || isGeneratingProgression}
             onSubmit={handleSubmit}
           />
         </div>

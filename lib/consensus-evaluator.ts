@@ -113,7 +113,7 @@ export async function evaluateConsensusWithStream(
     const finalObject = await Promise.race([
       result.object,
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Evaluation timeout after 60s')), 60000)
+        setTimeout(() => reject(new Error('Evaluation timeout after 2 minutes')), 120000)
       )
     ]);
     return finalObject;

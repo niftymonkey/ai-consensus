@@ -5,9 +5,9 @@ import { streamText } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { evaluateConsensusWithStream, type ConsensusEvaluation } from "@/lib/consensus-evaluator";
+import { evaluateConsensusWithStream } from "@/lib/consensus-evaluator";
 import { buildRefinementPrompt } from "@/lib/consensus-prompts";
-import type { ModelSelection } from "@/lib/types";
+import type { ModelSelection, ConsensusEvaluation } from "@/lib/types";
 import {
   createConsensusConversation,
   saveConsensusRound,
@@ -478,13 +478,13 @@ async function generateRoundResponses(opts: {
 
       // Stream to frontend and buffer with timeout
       let fullResponse = "";
-      const timeoutMs = 120000; // 120 seconds
+      const timeoutMs = 180000; // 3 minutes - increased to accommodate slower models
       const startTime = Date.now();
 
       for await (const chunk of result.textStream) {
         // Check timeout
         if (Date.now() - startTime > timeoutMs) {
-          throw new Error(`Model ${modelSelection.label} timeout after 120s`);
+          throw new Error(`Model ${modelSelection.label} timeout after 3 minutes`);
         }
 
         fullResponse += chunk;
