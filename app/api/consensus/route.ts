@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
         const allRoundsData: Array<{
           round: number;
           responses: Map<string, string>;
-          evaluation: any;
+          evaluation: ConsensusEvaluation;
         }> = [];
 
         try {
