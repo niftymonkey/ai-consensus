@@ -307,7 +307,7 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // Generate final synthesis (combined with progression summary if multiple rounds)
+          // Generate final synthesis
           controller.enqueue(
             encoder.encode(
               JSON.stringify({
@@ -316,19 +316,17 @@ export async function POST(request: NextRequest) {
             )
           );
 
-          console.log(`[Synthesis] Starting combined synthesis${allRoundsData.length > 1 ? ' + progression summary' : ''} with ${evaluatorProvider}:${evaluatorModel}`);
+          console.log(`[Synthesis] Starting final synthesis with ${evaluatorProvider}:${evaluatorModel}`);
 
           let finalSynthesis = "";
-          let progressionSummary = "";
-          await streamCombinedSynthesis({
+          await streamFinalSynthesis({
             originalPrompt: prompt,
             finalResponses: previousResponses,
             selectedModels: models,
             providerInstances,
             evaluatorProvider,
             evaluatorModel,
-            roundsData: allRoundsData,
-            onSynthesisChunk: (chunk) => {
+            onChunk: (chunk) => {
               finalSynthesis += chunk;
               controller.enqueue(
                 encoder.encode(
@@ -339,10 +337,30 @@ export async function POST(request: NextRequest) {
                 )
               );
             },
-            onProgressionChunk: (chunk) => {
-              // Only send progression chunks if we have multiple rounds
-              if (allRoundsData.length > 1) {
-                progressionSummary += chunk;
+          });
+
+          console.log(`[Synthesis] Final synthesis received (${finalSynthesis.length} chars)`);
+
+          // Generate progression summary (only if multiple rounds)
+          if (allRoundsData.length > 1) {
+            controller.enqueue(
+              encoder.encode(
+                JSON.stringify({
+                  type: "progression-summary-start",
+                }) + "\n"
+              )
+            );
+
+            console.log(`[Progression Summary] Starting progression summary generation`);
+
+            await streamProgressionSummary({
+              originalPrompt: prompt,
+              roundsData: allRoundsData,
+              selectedModels: models,
+              providerInstances,
+              evaluatorProvider,
+              evaluatorModel,
+              onChunk: (chunk) => {
                 controller.enqueue(
                   encoder.encode(
                     JSON.stringify({
@@ -351,23 +369,11 @@ export async function POST(request: NextRequest) {
                     }) + "\n"
                   )
                 );
-              }
-            },
-            onProgressionStart: () => {
-              if (allRoundsData.length > 1) {
-                controller.enqueue(
-                  encoder.encode(
-                    JSON.stringify({
-                      type: "progression-summary-start",
-                    }) + "\n"
-                  )
-                );
-              }
-            },
-          });
+              },
+            });
 
-          console.log(`[Synthesis] Complete - synthesis: ${finalSynthesis.length} chars${allRoundsData.length > 1 ? `, progression: ${progressionSummary.length} chars` : ''}`);
-
+            console.log(`[Progression Summary] Complete`);
+          }
 
           // Update database with final result
           await updateConversationResult(
@@ -561,55 +567,92 @@ function buildRefinementPromptsForAllModels(
 }
 
 /**
- * Generate and stream combined synthesis and progression summary in a single call
- * This reduces API costs by combining two operations into one
+ * Generate and stream final synthesis
  */
-async function streamCombinedSynthesis(opts: {
+async function streamFinalSynthesis(opts: {
   originalPrompt: string;
   finalResponses: Map<string, string>;
   selectedModels: ModelSelection[];
   providerInstances: Record<string, any>;
   evaluatorProvider: "anthropic" | "openai" | "google";
   evaluatorModel: string;
-  roundsData: Array<{
-    round: number;
-    responses: Map<string, string>;
-    evaluation: ConsensusEvaluation;
-  }>;
-  onSynthesisChunk: (chunk: string) => void;
-  onProgressionChunk: (chunk: string) => void;
-  onProgressionStart: () => void;
+  onChunk: (chunk: string) => void;
 }): Promise<void> {
-  // Use evaluator provider
+  // Use evaluator provider for synthesis
   const thinkingProvider = opts.providerInstances[opts.evaluatorProvider];
   const thinkingModel = opts.evaluatorModel;
 
-  // Build final responses text
+  // Build synthesis prompt
   const responsesText = opts.selectedModels
     .map((m) => {
       return `${m.label}:\n${opts.finalResponses.get(m.id)}`;
     })
     .join("\n\n---\n\n");
 
-  // Build progression context if multiple rounds
-  const includeProgression = opts.roundsData.length > 1;
-  let progressionContext = "";
-  
-  if (includeProgression) {
-    const RESPONSE_EXCERPT_LENGTH = 300;
-    
-    const formatRoundData = (roundData: typeof opts.roundsData[0]): string => {
-      const responsesText = opts.selectedModels
-        .map((m) => {
-          const response = roundData.responses.get(m.id) || "";
-          const excerpt = response.length > RESPONSE_EXCERPT_LENGTH 
-            ? `${response.substring(0, RESPONSE_EXCERPT_LENGTH)}...`
-            : response;
-          return `  - **${m.label}**: ${excerpt}`;
-        })
-        .join("\n");
+  const synthesisPrompt = `You are synthesizing a consensus response from ${opts.selectedModels.length} AI models.
 
-      return `**Round ${roundData.round}**:
+Original Question: ${opts.originalPrompt}
+
+Final Responses:
+---
+${responsesText}
+
+Create a single, unified response that:
+1. Incorporates the key insights from all models
+2. Presents a balanced, consensus view
+3. Acknowledges any remaining differences if they exist
+4. Provides a clear, coherent answer
+
+Generate the consensus response:`;
+
+  const synthesisResult = streamText({
+    model: thinkingProvider(thinkingModel),
+    prompt: synthesisPrompt,
+  });
+
+  // Stream chunks
+  for await (const chunk of synthesisResult.textStream) {
+    opts.onChunk(chunk);
+  }
+}
+
+/**
+ * Generate and stream progression summary
+ */
+async function streamProgressionSummary(opts: {
+  originalPrompt: string;
+  roundsData: Array<{
+    round: number;
+    responses: Map<string, string>;
+    evaluation: ConsensusEvaluation;
+  }>;
+  selectedModels: ModelSelection[];
+  providerInstances: Record<string, any>;
+  evaluatorProvider: "anthropic" | "openai" | "google";
+  evaluatorModel: string;
+  onChunk: (chunk: string) => void;
+}): Promise<void> {
+  // Use evaluator provider for progression summary
+  const thinkingProvider = opts.providerInstances[opts.evaluatorProvider];
+  const thinkingModel = opts.evaluatorModel;
+
+  // Maximum length for response excerpts in progression summary
+  const RESPONSE_EXCERPT_LENGTH = 300;
+
+  // Build progression summary prompt
+  // Helper to format round data for the prompt
+  const formatRoundData = (roundData: typeof opts.roundsData[0]): string => {
+    const responsesText = opts.selectedModels
+      .map((m) => {
+        const response = roundData.responses.get(m.id) || "";
+        const excerpt = response.length > RESPONSE_EXCERPT_LENGTH 
+          ? `${response.substring(0, RESPONSE_EXCERPT_LENGTH)}...`
+          : response;
+        return `  - **${m.label}**: ${excerpt}`;
+      })
+      .join("\n");
+
+    return `**Round ${roundData.round}**:
 - Consensus Score: ${roundData.evaluation.score}%
 - Summary: ${roundData.evaluation.summary}
 - Areas of Agreement: ${roundData.evaluation.areasOfAgreement?.join(", ") || "N/A"}
@@ -617,115 +660,54 @@ async function streamCombinedSynthesis(opts: {
 
 Model Responses (excerpts):
 ${responsesText}`;
-    };
+  };
 
-    const roundsSummaryText = opts.roundsData
-      .map(formatRoundData)
-      .join("\n\n---\n\n");
+  const roundsSummaryText = opts.roundsData
+    .map(formatRoundData)
+    .join("\n\n---\n\n");
 
-    progressionContext = `
-
-## Round-by-Round Evolution
-
-The models went through ${opts.roundsData.length} rounds of deliberation:
-
-${roundsSummaryText}`;
-  }
-
-  // Build combined prompt
-  const combinedPrompt = `You are synthesizing the final output from a multi-AI consensus process.
+  const progressionPrompt = `You are analyzing how AI models evolved their perspectives across multiple rounds of consensus-building.
 
 Original Question: ${opts.originalPrompt}
 
 Selected Models: ${opts.selectedModels.map(m => m.label).join(", ")}
 
-Final Responses:
+Rounds Data:
 ---
-${responsesText}${progressionContext}
+${roundsSummaryText}
 
-Your task is to generate TWO outputs:
+Create a compelling narrative summary that describes how the consensus evolved across these ${opts.roundsData.length} rounds. Focus on:
 
-## PART 1: Unified Consensus Response
-Create a single, unified response that:
-1. Incorporates the key insights from all models
-2. Presents a balanced, consensus view
-3. Acknowledges any remaining differences if they exist
-4. Provides a clear, coherent answer to the original question
-
-${includeProgression ? `## PART 2: Progression Summary (2-4 paragraphs)
-Analyze how the consensus evolved across the ${opts.roundsData.length} rounds:
-1. **How positions changed**: Did models significantly shift their stances, or maintain initial positions?
+1. **How positions changed**: Did models significantly shift their stances, or did they largely maintain their initial positions?
 2. **Convergence patterns**: What areas saw the most movement toward agreement? What remained contentious?
-3. **Key turning points**: Were there specific insights or refinements that helped bridge differences?
-4. **Individual model behaviors**: Did any model play a unique role in the evolution?
-5. **Final outcome**: How does the progression explain the final consensus?
+3. **Key turning points**: Were there specific insights or refinements in certain rounds that helped bridge differences?
+4. **Individual model behaviors**: Did any model play a unique role (e.g., one model consistently bridging gaps, another holding firm to a specific perspective)?
+5. **Final outcome**: How does the progression explain the final consensus (or lack thereof)?
 
-Write in an engaging, conversational tone. Use specific examples from the rounds.` : ''}
+**Important formatting constraints:**
+- Write in an engaging, conversational tone (similar to the round summaries' vibe)
+- Use at most 2 sentences per round when discussing individual rounds
+- If combining multiple rounds, you may use up to 3 sentences
+- Keep it concise but insightful (2-4 paragraphs total)
+- Use specific examples from the rounds
 
-${includeProgression ? `Generate PART 1 first, then output "---PROGRESSION---" on its own line, then generate PART 2:` : `Generate the consensus response:`}`;
+Generate the progression summary:`;
 
   try {
-    const result = streamText({
+    const progressionResult = streamText({
       model: thinkingProvider(thinkingModel),
-      prompt: combinedPrompt,
+      prompt: progressionPrompt,
     });
 
-    let inProgressionSection = false;
-    let buffer = "";
-
-    // Stream chunks and split between synthesis and progression
-    for await (const chunk of result.textStream) {
-      buffer += chunk;
-      
-      // Check if we've hit the delimiter
-      if (includeProgression && !inProgressionSection && buffer.includes("---PROGRESSION---")) {
-        const [synthesisChunk, rest] = buffer.split("---PROGRESSION---");
-        
-        // Send any remaining synthesis content
-        if (synthesisChunk) {
-          opts.onSynthesisChunk(synthesisChunk);
-        }
-        
-        // Switch to progression mode
-        inProgressionSection = true;
-        opts.onProgressionStart();
-        
-        // Send any progression content that came after delimiter
-        buffer = rest.trim();
-        if (buffer) {
-          opts.onProgressionChunk(buffer);
-          buffer = "";
-        }
-      } else if (inProgressionSection) {
-        // Send to progression
-        opts.onProgressionChunk(chunk);
-        buffer = "";
-      } else {
-        // Send to synthesis
-        opts.onSynthesisChunk(chunk);
-        buffer = "";
-      }
-    }
-    
-    // Handle any remaining buffer
-    if (buffer) {
-      if (inProgressionSection) {
-        opts.onProgressionChunk(buffer);
-      } else {
-        opts.onSynthesisChunk(buffer);
-      }
+    // Stream chunks
+    for await (const chunk of progressionResult.textStream) {
+      opts.onChunk(chunk);
     }
   } catch (error) {
-    console.error('[Combined Synthesis] Failed to generate:', error);
-    // Provide fallback
-    opts.onSynthesisChunk(
-      `Unable to generate full synthesis at this time. Please try again.`
+    console.error('[Progression Summary] Failed to generate:', error);
+    // Provide a fallback message if generation fails
+    opts.onChunk(
+      `Unable to generate progression summary at this time. The consensus evolved across ${opts.roundsData.length} rounds.`
     );
-    if (includeProgression) {
-      opts.onProgressionStart();
-      opts.onProgressionChunk(
-        `The consensus evolved across ${opts.roundsData.length} rounds.`
-      );
-    }
   }
 }
