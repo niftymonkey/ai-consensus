@@ -5,7 +5,7 @@ import { streamText } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { evaluateConsensusWithStream } from "@/lib/consensus-evaluator";
+import { evaluateConsensusWithStream, type ConsensusEvaluation } from "@/lib/consensus-evaluator";
 import { buildRefinementPrompt } from "@/lib/consensus-prompts";
 import type { ModelSelection } from "@/lib/types";
 import {
@@ -624,7 +624,7 @@ async function streamProgressionSummary(opts: {
   roundsData: Array<{
     round: number;
     responses: Map<string, string>;
-    evaluation: any;
+    evaluation: ConsensusEvaluation;
   }>;
   selectedModels: ModelSelection[];
   providerInstances: Record<string, any>;
@@ -636,12 +636,15 @@ async function streamProgressionSummary(opts: {
   const thinkingProvider = opts.providerInstances[opts.evaluatorProvider];
   const thinkingModel = opts.evaluatorModel;
 
+  // Maximum length for response excerpts in progression summary
+  const RESPONSE_EXCERPT_LENGTH = 300;
+
   // Build progression summary prompt
   const roundsSummaryText = opts.roundsData
     .map((roundData) => {
       const responsesText = opts.selectedModels
         .map((m) => {
-          return `  - **${m.label}**: ${roundData.responses.get(m.id)?.substring(0, 300)}...`;
+          return `  - **${m.label}**: ${roundData.responses.get(m.id)?.substring(0, RESPONSE_EXCERPT_LENGTH)}...`;
         })
         .join("\n");
 
