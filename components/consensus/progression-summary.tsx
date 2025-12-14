@@ -13,7 +13,7 @@ export function ProgressionSummary({ progressionSummary, isStreaming = false }: 
   if (!progressionSummary && !isStreaming) return null;
 
   return (
-    <Card className="border-2 border-primary/20 bg-primary/5">
+    <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <span className="text-2xl">🎯</span>
