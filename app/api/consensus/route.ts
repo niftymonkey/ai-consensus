@@ -690,6 +690,10 @@ Create a compelling narrative summary that describes how the consensus evolved a
 - If combining multiple rounds, you may use up to 3 sentences
 - Keep it concise but insightful (2-4 paragraphs total)
 - Use specific examples from the rounds
+- **Use markdown formatting** to make it visually engaging:
+  - Use **bold** for model names and key terms
+  - Use *italics* for emphasis on important shifts or insights
+  - Consider using bullet points or numbered lists where appropriate
 
 Generate the progression summary:`;
 
