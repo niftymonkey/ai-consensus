@@ -8,13 +8,23 @@ interface ChatInputProps {
   setPrompt: (prompt: string) => void;
   isLoading: boolean;
   onSubmit: (e: React.FormEvent) => void;
+  onCancel?: () => void;
 }
 
-export function ChatInput({ prompt, setPrompt, isLoading, onSubmit }: ChatInputProps) {
+export function ChatInput({ prompt, setPrompt, isLoading, onSubmit, onCancel }: ChatInputProps) {
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      onSubmit(e as any);
+      if (!isLoading) {
+        onSubmit(e as any);
+      }
+    }
+  }
+
+  function handleButtonClick(e: React.MouseEvent<HTMLButtonElement>) {
+    if (isLoading && onCancel) {
+      e.preventDefault();
+      onCancel();
     }
   }
 
@@ -39,10 +49,12 @@ export function ChatInput({ prompt, setPrompt, isLoading, onSubmit }: ChatInputP
               Press Enter to send, Shift+Enter for new line
             </p>
             <Button
-              type="submit"
-              disabled={isLoading || !prompt.trim()}
+              type={isLoading ? "button" : "submit"}
+              disabled={!isLoading && !prompt.trim()}
+              onClick={handleButtonClick}
+              variant={isLoading ? "destructive" : "default"}
             >
-              {isLoading ? "Getting responses..." : "Ask"}
+              {isLoading ? "Cancel" : "Ask"}
             </Button>
           </div>
         </CardContent>
