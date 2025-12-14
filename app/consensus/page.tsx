@@ -388,6 +388,7 @@ export default function ConsensusPage() {
 
       case "complete":
         setOverallStatus("Complete!");
+        setIsSynthesizing(false);
         setIsGeneratingProgression(false);
         setTimeout(() => setOverallStatus(null), 2000); // Clear after 2 seconds
         break;
