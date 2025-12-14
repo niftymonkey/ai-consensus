@@ -22,6 +22,8 @@ export function ChatInput({ prompt, setPrompt, isLoading, onSubmit, onCancel }: 
   }
 
   function handleButtonClick(e: React.MouseEvent<HTMLButtonElement>) {
+    // When loading, button type is "button" (not "submit"), so we handle the click
+    // When not loading, button type is "submit", so form submission happens naturally
     if (isLoading && onCancel) {
       e.preventDefault();
       onCancel();
