@@ -177,7 +177,8 @@ export default function ConsensusPage() {
     // Set client-side timeout safeguard (5 minutes - matches API maxDuration)
     // This is the last-resort failsafe; individual operations have their own timeouts
     timeoutIdRef.current = setTimeout(() => {
-      if (isProcessing || isSynthesizing || isGeneratingProgression) {
+      // Only abort if there's still an active request
+      if (abortControllerRef.current) {
         alert("The consensus evaluation is taking too long. Please try again.");
         handleCancel();
       }

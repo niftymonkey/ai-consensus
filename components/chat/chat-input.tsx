@@ -52,7 +52,7 @@ export function ChatInput({ prompt, setPrompt, isLoading, onSubmit, onCancel }: 
             </p>
             <Button
               type={isLoading ? "button" : "submit"}
-              disabled={!isLoading && !prompt.trim()}
+              disabled={isLoading ? false : !prompt.trim()}
               onClick={handleButtonClick}
               variant={isLoading ? "destructive" : "default"}
             >
