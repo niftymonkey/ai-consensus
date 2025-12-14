@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { ProgressionSummary } from "./progression-summary";
 import type { ModelSelection } from "@/lib/types";
 
 interface DualViewProps {
@@ -12,6 +13,8 @@ interface DualViewProps {
   finalResponses: Map<string, string>;
   selectedModels: ModelSelection[];
   isStreaming: boolean;
+  progressionSummary?: string | null;
+  isGeneratingProgression?: boolean;
 }
 
 export function DualView({
@@ -19,10 +22,20 @@ export function DualView({
   finalResponses,
   selectedModels,
   isStreaming,
+  progressionSummary = null,
+  isGeneratingProgression = false,
 }: DualViewProps) {
   return (
     <div className="space-y-6">
       <Separator className="my-8" />
+
+      {/* Progression Summary - Show when rounds completed */}
+      {(progressionSummary || isGeneratingProgression) && (
+        <ProgressionSummary
+          progressionSummary={progressionSummary || ""}
+          isStreaming={isGeneratingProgression}
+        />
+      )}
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Unified Consensus */}

@@ -45,6 +45,7 @@ export interface ConsensusState {
   currentRound: number;
   finalConsensus: string | null;
   finalResponses: Map<string, string> | null; // modelId -> response text
+  progressionSummary: string | null; // Summary of how consensus evolved
 }
 
 // Stream event types from API
@@ -78,6 +79,8 @@ export type ConsensusStreamEvent =
   | { type: "refinement-prompts"; data: Record<string, string>; round: number }
   | { type: "synthesis-start" }
   | { type: "synthesis-chunk"; content: string }
+  | { type: "progression-summary-start" }
+  | { type: "progression-summary-chunk"; content: string }
   | { type: "final-responses"; data: Record<string, string> }
   | { type: "complete" }
   | { type: "error"; data: { message: string; round: number; details: string } };

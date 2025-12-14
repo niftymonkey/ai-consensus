@@ -7,7 +7,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { evaluateConsensusWithStream } from "@/lib/consensus-evaluator";
 import { buildRefinementPrompt } from "@/lib/consensus-prompts";
-import type { ModelSelection } from "@/lib/types";
+import type { ModelSelection, ConsensusEvaluation } from "@/lib/types";
 import {
   createConsensusConversation,
   saveConsensusRound,
@@ -133,6 +133,11 @@ export async function POST(request: NextRequest) {
         let previousResponses = new Map<string, string>();
         let isGoodEnough = false;
         let finalScore = 0;
+        const allRoundsData: Array<{
+          round: number;
+          responses: Map<string, string>;
+          evaluation: ConsensusEvaluation;
+        }> = [];
 
         try {
           // Send start event
@@ -254,6 +259,13 @@ export async function POST(request: NextRequest) {
 
             previousResponses = roundResponses;
 
+            // Store round data for progression summary
+            allRoundsData.push({
+              round: currentRound,
+              responses: new Map(roundResponses),
+              evaluation: evaluation,
+            });
+
             // Save round to database
             await saveConsensusRound(conversationId, {
               roundNumber: currentRound,
@@ -328,6 +340,40 @@ export async function POST(request: NextRequest) {
           });
 
           console.log(`[Synthesis] Final synthesis received (${finalSynthesis.length} chars)`);
+
+          // Generate progression summary (only if multiple rounds)
+          if (allRoundsData.length > 1) {
+            controller.enqueue(
+              encoder.encode(
+                JSON.stringify({
+                  type: "progression-summary-start",
+                }) + "\n"
+              )
+            );
+
+            console.log(`[Progression Summary] Starting progression summary generation`);
+
+            await streamProgressionSummary({
+              originalPrompt: prompt,
+              roundsData: allRoundsData,
+              selectedModels: models,
+              providerInstances,
+              evaluatorProvider,
+              evaluatorModel,
+              onChunk: (chunk) => {
+                controller.enqueue(
+                  encoder.encode(
+                    JSON.stringify({
+                      type: "progression-summary-chunk",
+                      content: chunk,
+                    }) + "\n"
+                  )
+                );
+              },
+            });
+
+            console.log(`[Progression Summary] Complete`);
+          }
 
           // Update database with final result
           await updateConversationResult(
@@ -432,13 +478,13 @@ async function generateRoundResponses(opts: {
 
       // Stream to frontend and buffer with timeout
       let fullResponse = "";
-      const timeoutMs = 120000; // 120 seconds
+      const timeoutMs = 180000; // 3 minutes - increased to accommodate slower models
       const startTime = Date.now();
 
       for await (const chunk of result.textStream) {
         // Check timeout
         if (Date.now() - startTime > timeoutMs) {
-          throw new Error(`Model ${modelSelection.label} timeout after 120s`);
+          throw new Error(`Model ${modelSelection.label} timeout after 3 minutes`);
         }
 
         fullResponse += chunk;
@@ -567,5 +613,105 @@ Generate the consensus response:`;
   // Stream chunks
   for await (const chunk of synthesisResult.textStream) {
     opts.onChunk(chunk);
+  }
+}
+
+/**
+ * Generate and stream progression summary
+ */
+async function streamProgressionSummary(opts: {
+  originalPrompt: string;
+  roundsData: Array<{
+    round: number;
+    responses: Map<string, string>;
+    evaluation: ConsensusEvaluation;
+  }>;
+  selectedModels: ModelSelection[];
+  providerInstances: Record<string, any>;
+  evaluatorProvider: "anthropic" | "openai" | "google";
+  evaluatorModel: string;
+  onChunk: (chunk: string) => void;
+}): Promise<void> {
+  // Use evaluator provider for progression summary
+  const thinkingProvider = opts.providerInstances[opts.evaluatorProvider];
+  const thinkingModel = opts.evaluatorModel;
+
+  // Maximum length for response excerpts in progression summary
+  const RESPONSE_EXCERPT_LENGTH = 300;
+
+  // Build progression summary prompt
+  // Helper to format round data for the prompt
+  const formatRoundData = (roundData: typeof opts.roundsData[0]): string => {
+    const responsesText = opts.selectedModels
+      .map((m) => {
+        const response = roundData.responses.get(m.id) || "";
+        const excerpt = response.length > RESPONSE_EXCERPT_LENGTH 
+          ? `${response.substring(0, RESPONSE_EXCERPT_LENGTH)}...`
+          : response;
+        return `  - **${m.label}**: ${excerpt}`;
+      })
+      .join("\n");
+
+    return `**Round ${roundData.round}**:
+- Consensus Score: ${roundData.evaluation.score}%
+- Summary: ${roundData.evaluation.summary}
+- Areas of Agreement: ${roundData.evaluation.areasOfAgreement?.join(", ") || "N/A"}
+- Key Differences: ${roundData.evaluation.keyDifferences?.join(", ") || "N/A"}
+
+Model Responses (excerpts):
+${responsesText}`;
+  };
+
+  const roundsSummaryText = opts.roundsData
+    .map(formatRoundData)
+    .join("\n\n---\n\n");
+
+  const progressionPrompt = `You are analyzing how AI models evolved their perspectives across multiple rounds of consensus-building.
+
+Original Question: ${opts.originalPrompt}
+
+Selected Models: ${opts.selectedModels.map(m => m.label).join(", ")}
+
+Rounds Data:
+---
+${roundsSummaryText}
+
+Create a compelling narrative summary that describes how the consensus evolved across these ${opts.roundsData.length} rounds. Focus on:
+
+1. **How positions changed**: Did models significantly shift their stances, or did they largely maintain their initial positions?
+2. **Convergence patterns**: What areas saw the most movement toward agreement? What remained contentious?
+3. **Key turning points**: Were there specific insights or refinements in certain rounds that helped bridge differences?
+4. **Individual model behaviors**: Did any model play a unique role (e.g., one model consistently bridging gaps, another holding firm to a specific perspective)?
+5. **Final outcome**: How does the progression explain the final consensus (or lack thereof)?
+
+**Important formatting constraints:**
+- Write in an engaging, conversational tone (similar to the round summaries' vibe)
+- Use at most 2 sentences per round when discussing individual rounds
+- If combining multiple rounds, you may use up to 3 sentences
+- Keep it concise but insightful (2-4 paragraphs total)
+- Use specific examples from the rounds
+- **Use markdown formatting** to make it visually engaging:
+  - Use **bold** for model names and key terms
+  - Use *italics* for emphasis on important shifts or insights
+  - Consider using bullet points or numbered lists where appropriate
+
+Generate the progression summary:`;
+
+  try {
+    const progressionResult = streamText({
+      model: thinkingProvider(thinkingModel),
+      prompt: progressionPrompt,
+    });
+
+    // Stream chunks
+    for await (const chunk of progressionResult.textStream) {
+      opts.onChunk(chunk);
+    }
+  } catch (error) {
+    console.error('[Progression Summary] Failed to generate:', error);
+    // Provide a fallback message if generation fails
+    opts.onChunk(
+      `Unable to generate progression summary at this time. The consensus evolved across ${opts.roundsData.length} rounds.`
+    );
   }
 }
