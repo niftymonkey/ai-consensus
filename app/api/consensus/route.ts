@@ -139,23 +139,50 @@ export async function POST(request: NextRequest) {
           evaluation: ConsensusEvaluation;
         }> = [];
 
+        // Helper: safely enqueue data, checking if request was aborted
+        const safeEnqueue = (data: Uint8Array): boolean => {
+          if (request.signal.aborted) {
+            return false;
+          }
+          try {
+            controller.enqueue(data);
+            return true;
+          } catch (error) {
+            // Controller may be closed if client disconnected
+            console.log("Stream controller closed:", error instanceof Error ? error.message : 'Unknown error');
+            return false;
+          }
+        };
+
         try {
+          // Check if already aborted before starting
+          if (request.signal.aborted) {
+            console.log("Request aborted before processing started");
+            return;
+          }
+
           // Send start event
-          controller.enqueue(
+          if (!safeEnqueue(
             encoder.encode(
               JSON.stringify({
                 type: "start",
                 conversationId,
               }) + "\n"
             )
-          );
+          )) return;
 
           // Multi-round loop with early termination
           while (currentRound < maxRounds && !isGoodEnough) {
+            // Check if aborted
+            if (request.signal.aborted) {
+              console.log("Request aborted during round loop");
+              return;
+            }
+
             currentRound++;
 
             // Stream round status
-            controller.enqueue(
+            if (!safeEnqueue(
               encoder.encode(
                 JSON.stringify({
                   type: "round-status",
@@ -169,7 +196,7 @@ export async function POST(request: NextRequest) {
                   },
                 }) + "\n"
               )
-            );
+            )) return;
 
             // Generate responses from all selected models
             const roundResponses = await generateRoundResponses({
@@ -181,17 +208,24 @@ export async function POST(request: NextRequest) {
               controller,
               encoder,
               round: currentRound,
+              signal: request.signal,
             });
 
+            // Check if aborted after generating responses
+            if (request.signal.aborted) {
+              console.log("Request aborted after generating responses");
+              return;
+            }
+
             // Send evaluation start event
-            controller.enqueue(
+            if (!safeEnqueue(
               encoder.encode(
                 JSON.stringify({
                   type: "evaluation-start",
                   round: currentRound,
                 }) + "\n"
               )
-            );
+            )) return;
 
             // Evaluate consensus with error handling
             let evaluation;
@@ -208,7 +242,7 @@ export async function POST(request: NextRequest) {
                 currentRound,
                 (partial) => {
                   // Stream partial evaluation updates to frontend
-                  controller.enqueue(
+                  safeEnqueue(
                     encoder.encode(
                       JSON.stringify({
                         type: "evaluation",
@@ -223,18 +257,18 @@ export async function POST(request: NextRequest) {
               console.log(`[Round ${currentRound}] Consensus evaluation received - Score: ${evaluation.score}%, isGoodEnough: ${evaluation.isGoodEnough}`);
 
               // Send evaluation complete event
-              controller.enqueue(
+              if (!safeEnqueue(
                 encoder.encode(
                   JSON.stringify({
                     type: "evaluation-complete",
                     round: currentRound,
                   }) + "\n"
                 )
-              );
+              )) return;
             } catch (error) {
               console.error(`[Round ${currentRound}] Evaluation failed:`, error);
 
-              controller.enqueue(
+              safeEnqueue(
                 encoder.encode(
                   JSON.stringify({
                     type: "error",
@@ -295,7 +329,7 @@ export async function POST(request: NextRequest) {
                 currentRound + 1
               );
 
-              controller.enqueue(
+              if (!safeEnqueue(
                 encoder.encode(
                   JSON.stringify({
                     type: "refinement-prompts",
@@ -303,18 +337,24 @@ export async function POST(request: NextRequest) {
                     round: currentRound,
                   }) + "\n"
                 )
-              );
+              )) return;
             }
           }
 
+          // Check if aborted before synthesis
+          if (request.signal.aborted) {
+            console.log("Request aborted before synthesis");
+            return;
+          }
+
           // Generate final synthesis
-          controller.enqueue(
+          if (!safeEnqueue(
             encoder.encode(
               JSON.stringify({
                 type: "synthesis-start",
               }) + "\n"
             )
-          );
+          )) return;
 
           console.log(`[Synthesis] Starting final synthesis with ${evaluatorProvider}:${evaluatorModel}`);
 
@@ -328,7 +368,7 @@ export async function POST(request: NextRequest) {
             evaluatorModel,
             onChunk: (chunk) => {
               finalSynthesis += chunk;
-              controller.enqueue(
+              safeEnqueue(
                 encoder.encode(
                   JSON.stringify({
                     type: "synthesis-chunk",
@@ -341,15 +381,21 @@ export async function POST(request: NextRequest) {
 
           console.log(`[Synthesis] Final synthesis received (${finalSynthesis.length} chars)`);
 
+          // Check if aborted before progression summary
+          if (request.signal.aborted) {
+            console.log("Request aborted before progression summary");
+            return;
+          }
+
           // Generate progression summary (only if multiple rounds)
           if (allRoundsData.length > 1) {
-            controller.enqueue(
+            if (!safeEnqueue(
               encoder.encode(
                 JSON.stringify({
                   type: "progression-summary-start",
                 }) + "\n"
               )
-            );
+            )) return;
 
             console.log(`[Progression Summary] Starting progression summary generation`);
 
@@ -361,7 +407,7 @@ export async function POST(request: NextRequest) {
               evaluatorProvider,
               evaluatorModel,
               onChunk: (chunk) => {
-                controller.enqueue(
+                safeEnqueue(
                   encoder.encode(
                     JSON.stringify({
                       type: "progression-summary-chunk",
@@ -375,6 +421,12 @@ export async function POST(request: NextRequest) {
             console.log(`[Progression Summary] Complete`);
           }
 
+          // Check if aborted before final updates
+          if (request.signal.aborted) {
+            console.log("Request aborted before final updates");
+            return;
+          }
+
           // Update database with final result
           await updateConversationResult(
             conversationId,
@@ -384,17 +436,17 @@ export async function POST(request: NextRequest) {
           );
 
           // Send final responses
-          controller.enqueue(
+          if (!safeEnqueue(
             encoder.encode(
               JSON.stringify({
                 type: "final-responses",
                 data: Object.fromEntries(previousResponses),
               }) + "\n"
             )
-          );
+          )) return;
 
           // Send complete event
-          controller.enqueue(
+          safeEnqueue(
             encoder.encode(
               JSON.stringify({
                 type: "complete",
@@ -403,7 +455,7 @@ export async function POST(request: NextRequest) {
           );
         } catch (error: any) {
           console.error("Error in consensus workflow:", error);
-          controller.enqueue(
+          safeEnqueue(
             encoder.encode(
               JSON.stringify({
                 type: "error",
@@ -442,8 +494,23 @@ async function generateRoundResponses(opts: {
   controller: ReadableStreamDefaultController;
   encoder: TextEncoder;
   round: number;
+  signal: AbortSignal;
 }): Promise<Map<string, string>> {
   const responses = new Map<string, string>();
+
+  // Helper: safely enqueue, checking abort signal
+  const safeEnqueue = (data: Uint8Array): boolean => {
+    if (opts.signal.aborted) {
+      return false;
+    }
+    try {
+      opts.controller.enqueue(data);
+      return true;
+    } catch (error) {
+      console.log("Stream controller closed in generateRoundResponses:", error instanceof Error ? error.message : 'Unknown error');
+      return false;
+    }
+  };
 
   // Helper: stream and buffer single model response with timeout
   async function streamAndBuffer(modelSelection: ModelSelection) {
@@ -482,6 +549,12 @@ async function generateRoundResponses(opts: {
       const startTime = Date.now();
 
       for await (const chunk of result.textStream) {
+        // Check if aborted
+        if (opts.signal.aborted) {
+          console.log(`Model ${modelSelection.id} streaming aborted`);
+          return;
+        }
+
         // Check timeout
         if (Date.now() - startTime > timeoutMs) {
           throw new Error(`Model ${modelSelection.label} timeout after 3 minutes`);
@@ -489,7 +562,7 @@ async function generateRoundResponses(opts: {
 
         fullResponse += chunk;
 
-        opts.controller.enqueue(
+        if (!safeEnqueue(
           opts.encoder.encode(
             JSON.stringify({
               type: "model-response",
@@ -501,7 +574,10 @@ async function generateRoundResponses(opts: {
               },
             }) + "\n"
           )
-        );
+        )) {
+          // Stream closed, stop processing
+          return;
+        }
       }
 
       // Buffer complete response for evaluation
@@ -509,20 +585,22 @@ async function generateRoundResponses(opts: {
     } catch (error) {
       console.error(`Model ${modelSelection.id} failed:`, error);
 
-      // Send error event to client
-      opts.controller.enqueue(
-        opts.encoder.encode(
-          JSON.stringify({
-            type: "model-error",
-            data: {
-              modelId: modelSelection.id,
-              modelLabel: modelSelection.label,
-              error: error instanceof Error ? error.message : 'Unknown error',
-              round: opts.round,
-            },
-          }) + "\n"
-        )
-      );
+      // Send error event to client (only if not aborted)
+      if (!opts.signal.aborted) {
+        safeEnqueue(
+          opts.encoder.encode(
+            JSON.stringify({
+              type: "model-error",
+              data: {
+                modelId: modelSelection.id,
+                modelLabel: modelSelection.label,
+                error: error instanceof Error ? error.message : 'Unknown error',
+                round: opts.round,
+              },
+            }) + "\n"
+          )
+        );
+      }
 
       // Set placeholder response so consensus can continue with remaining models
       responses.set(modelSelection.id, `[Error: ${modelSelection.label} did not respond]`);

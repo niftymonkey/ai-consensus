@@ -57,6 +57,7 @@ export default function ConsensusPage() {
   const currentRoundResponsesRef = useRef<Map<string, string>>(new Map());
   const currentRoundRef = useRef<number>(0);
   const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Initialize default models when available models are loaded
   useEffect(() => {
@@ -127,6 +128,21 @@ export default function ConsensusPage() {
     }
   }, [availableModels]);
 
+  function handleCancel() {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (timeoutIdRef.current) {
+      clearTimeout(timeoutIdRef.current);
+      timeoutIdRef.current = null;
+    }
+    setIsProcessing(false);
+    setIsSynthesizing(false);
+    setIsGeneratingProgression(false);
+    setOverallStatus(null);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -155,15 +171,16 @@ export default function ConsensusPage() {
     setIsGeneratingProgression(false);
     setOverallStatus(null);
 
+    // Create abort controller for this request
+    abortControllerRef.current = new AbortController();
+
     // Set client-side timeout safeguard (5 minutes - matches API maxDuration)
     // This is the last-resort failsafe; individual operations have their own timeouts
     timeoutIdRef.current = setTimeout(() => {
-      if (isProcessing || isSynthesizing || isGeneratingProgression) {
+      // Only abort if there's still an active request
+      if (abortControllerRef.current) {
         alert("The consensus evaluation is taking too long. Please try again.");
-        setIsProcessing(false);
-        setIsSynthesizing(false);
-        setIsGeneratingProgression(false);
-        setOverallStatus(null);
+        handleCancel();
       }
     }, 300000);
 
@@ -178,6 +195,7 @@ export default function ConsensusPage() {
           consensusThreshold,
           evaluatorModel,
         }),
+        signal: abortControllerRef.current.signal,
       });
 
       if (!response.ok) {
@@ -230,14 +248,25 @@ export default function ConsensusPage() {
         }
       }
     } catch (error: any) {
-      console.error("Error:", error);
-      alert(error.message || "An error occurred");
+      // Don't show error alert for user-initiated cancellation
+      if (error.name === 'AbortError') {
+        console.log("Consensus evaluation cancelled by user");
+      } else {
+        console.error("Error:", error);
+        alert(error.message || "An error occurred");
+      }
     } finally {
       setIsProcessing(false);
-      // Clear timeout when processing completes
+      setIsSynthesizing(false);
+      setIsGeneratingProgression(false);
+      setOverallStatus(null);
+      // Clear timeout and abort controller when processing completes
       if (timeoutIdRef.current) {
         clearTimeout(timeoutIdRef.current);
         timeoutIdRef.current = null;
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current = null;
       }
     }
   }
@@ -452,6 +481,7 @@ export default function ConsensusPage() {
             setPrompt={setPrompt}
             isLoading={isProcessing || isSynthesizing || isGeneratingProgression}
             onSubmit={handleSubmit}
+            onCancel={handleCancel}
           />
         </div>
 
