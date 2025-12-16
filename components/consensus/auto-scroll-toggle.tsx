@@ -45,21 +45,20 @@ export function AutoScrollToggle({
           <TooltipTrigger asChild>
             <Button
               variant={enabled ? "default" : "outline"}
-              size="icon"
               onClick={handleClick}
-              className="h-12 w-12 rounded-full shadow-lg transition-all hover:scale-110"
+              className="h-12 rounded-full shadow-lg transition-all hover:scale-105 flex items-center gap-2 px-4"
             >
               {enabled ? (
-                <ArrowDownCircle className="h-6 w-6" />
+                <ArrowDownCircle className="h-5 w-5" />
               ) : (
-                <ArrowDown className="h-6 w-6" />
+                <ArrowDown className="h-5 w-5" />
               )}
+              <span className="text-sm font-medium">
+                Auto-scroll {enabled ? "ON" : "OFF"}
+              </span>
             </Button>
           </TooltipTrigger>
           <TooltipContent side="left" className="max-w-xs">
-            <p className="font-medium">
-              {enabled ? "Auto-scroll enabled" : "Auto-scroll disabled"}
-            </p>
             <p className="text-xs text-muted-foreground">
               {enabled
                 ? "Following new content automatically"
