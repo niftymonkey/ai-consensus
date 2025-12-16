@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { Hero } from "@/components/landing/hero";
-import { AIModelCards } from "@/components/landing/ai-model-cards";
-import { DevelopmentProgress } from "@/components/landing/development-progress";
+import { BenefitCards } from "@/components/landing/benefit-cards";
+import { HowItWorks } from "@/components/landing/how-it-works";
 import { CTAButtons } from "@/components/landing/cta-buttons";
 
 export const dynamic = 'force-dynamic';
@@ -10,17 +10,28 @@ export default async function Home() {
   const session = await auth();
 
   return (
-    <div className="container py-12">
-      <div className="space-y-8 text-center">
-        <Hero />
-        {session && <CTAButtons />}
-        <AIModelCards />
-        <div className="grid gap-6 md:grid-cols-3">
-          <div className="md:col-start-2">
-            <DevelopmentProgress />
+    <main className="flex min-h-screen flex-col">
+      <div className="flex flex-1 flex-col items-center justify-center px-4 py-8 sm:py-12 lg:py-16">
+        <div className="w-full max-w-5xl text-center">
+          <Hero />
+
+          <div className="mt-6 sm:mt-8">
+            <BenefitCards />
+          </div>
+
+          <div className="mt-8 sm:mt-12 lg:mt-16">
+            <hr className="border-t border-border" />
+          </div>
+
+          <div className="mt-8 sm:mt-12 lg:mt-16">
+            <HowItWorks />
+          </div>
+
+          <div className="mt-8 sm:mt-12 lg:mt-16">
+            <CTAButtons isSignedIn={!!session} />
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

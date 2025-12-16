@@ -36,17 +36,6 @@ function getDifferenceStyling(score: number): string {
   return "bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900";
 }
 
-function getDifferenceIcon(score: number): string {
-  if (score >= 75) return "💬";
-  if (score >= 50) return "⚡";
-  return "💥";
-}
-
-function getDifferenceTitle(score: number): string {
-  if (score >= 75) return "Minor Differences";
-  if (score >= 50) return "Where They Diverge";
-  return "Big Disagreements!";
-}
 
 function getEmojiFromScore(score: number): string {
   if (score >= 90) return "🎉";
@@ -85,6 +74,8 @@ interface RoundsPanelProps {
   consensusThreshold: number;
   currentRoundResponses?: Map<string, string>;
   currentEvaluation?: Partial<import("@/lib/types").ConsensusEvaluation> | null;
+  onUserInteraction?: () => void;
+  resetToCurrentRound?: boolean;
 }
 
 export function RoundsPanel({
@@ -97,6 +88,8 @@ export function RoundsPanel({
   consensusThreshold,
   currentRoundResponses,
   currentEvaluation,
+  onUserInteraction,
+  resetToCurrentRound = false,
 }: RoundsPanelProps) {
   const [selectedRoundTab, setSelectedRoundTab] = useState<string>("1");
   const [userHasInteracted, setUserHasInteracted] = useState(false);
@@ -114,6 +107,14 @@ export function RoundsPanel({
       setSelectedRoundTab(String(currentRound));
     }
   }, [currentRound, userHasInteracted]);
+
+  // Reset to current round when requested (e.g., when resuming auto-scroll)
+  useEffect(() => {
+    if (resetToCurrentRound && currentRound > 0) {
+      setSelectedRoundTab(String(currentRound));
+      setUserHasInteracted(false);
+    }
+  }, [resetToCurrentRound, currentRound]);
 
   // Build list of all rounds including current round if it's being processed
   const allRounds = [...rounds];
@@ -162,7 +163,9 @@ export function RoundsPanel({
             const isCurrent = !isSynthesizing && currentRound === roundNumber && isProcessing;
             const isSkipped = !isProcessing && roundNumber > currentRound;
             const roundData = rounds.find((r) => r.roundNumber === roundNumber);
-            const isClickable = roundData !== undefined;
+            // Make round clickable if it exists in allRounds (includes current in-progress round)
+            const roundInAllRounds = allRounds.find((r) => r.roundNumber === roundNumber);
+            const isClickable = roundInAllRounds !== undefined;
 
             const isSelected = selectedRoundTab === String(roundNumber);
 
@@ -172,6 +175,8 @@ export function RoundsPanel({
                 onClick={() => {
                   if (!isClickable) return;
                   setUserHasInteracted(true);
+                  // Pause auto-scroll when user clicks on rounds
+                  onUserInteraction?.();
                   // Toggle: if clicking selected round, collapse it
                   setSelectedRoundTab(isSelected ? "" : String(roundNumber));
                 }}
@@ -305,19 +310,19 @@ export function RoundsPanel({
                       </div>
                     )}
 
-                    {/* Right: Key Differences - With Drama! */}
+                    {/* Right: Key Differences */}
                     {round.evaluation.keyDifferences.length > 0 && (
                       <div className={`p-4 rounded-lg ${getDifferenceStyling(round.evaluation.score)}`}>
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="text-lg">{getDifferenceIcon(round.evaluation.score)}</span>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-lg">⚠️</span>
                           <span className="font-semibold">
-                            {getDifferenceTitle(round.evaluation.score)}
+                            Key Differences
                           </span>
                         </div>
                         <ul className="space-y-2">
                           {round.evaluation.keyDifferences.map((diff, i) => (
                             <li key={i} className="text-sm flex gap-2">
-                              <span>→</span>
+                              <span>•</span>
                               <span>{diff}</span>
                             </li>
                           ))}
@@ -332,10 +337,13 @@ export function RoundsPanel({
                       type="single"
                       collapsible
                       value={expandedSections.detailedAnalysis ? "reasoning" : ""}
-                      onValueChange={(value) => setExpandedSections(prev => ({
-                        ...prev,
-                        detailedAnalysis: value === "reasoning"
-                      }))}
+                      onValueChange={(value) => {
+                        onUserInteraction?.();
+                        setExpandedSections(prev => ({
+                          ...prev,
+                          detailedAnalysis: value === "reasoning"
+                        }));
+                      }}
                     >
                       <AccordionItem value="reasoning">
                         <AccordionTrigger className="text-sm hover:no-underline">
@@ -385,10 +393,13 @@ export function RoundsPanel({
                   type="single"
                   collapsible
                   value={expandedSections.modelResponses ? "responses" : ""}
-                  onValueChange={(value) => setExpandedSections(prev => ({
-                    ...prev,
-                    modelResponses: value === "responses"
-                  }))}
+                  onValueChange={(value) => {
+                    onUserInteraction?.();
+                    setExpandedSections(prev => ({
+                      ...prev,
+                      modelResponses: value === "responses"
+                    }));
+                  }}
                 >
                   <AccordionItem value="responses">
                     <AccordionTrigger className="text-sm hover:no-underline">
@@ -455,10 +466,13 @@ export function RoundsPanel({
                     type="single"
                     collapsible
                     value={expandedSections.refinementPrompts ? "refinement" : ""}
-                    onValueChange={(value) => setExpandedSections(prev => ({
-                      ...prev,
-                      refinementPrompts: value === "refinement"
-                    }))}
+                    onValueChange={(value) => {
+                      onUserInteraction?.();
+                      setExpandedSections(prev => ({
+                        ...prev,
+                        refinementPrompts: value === "refinement"
+                      }));
+                    }}
                   >
                     <AccordionItem value="refinement">
                       <AccordionTrigger className="text-sm hover:no-underline">

@@ -1,172 +1,153 @@
-# AI Consensus - Current Development Status
+# Phase 3: Auto-scroll & UX Refinements
 
-**Last Updated:** December 8, 2025
+## Summary
+Implemented auto-scroll functionality (Issue #17) with intelligent pause/resume behavior, plus additional UX improvements for a smoother consensus experience.
 
-## Project Overview
-An innovative web app where Claude, GPT-4, and Gemini collaborate to reach consensus on user questions through iterative deliberation.
+## Features Completed
 
-## Current Branch
-`feat/authentication` - Authentication system implementation
+### Auto-scroll Implementation (Issue #17)
 
-## What's Been Completed ✅
+**Core Functionality:**
+- ✅ Auto-scroll follows new content as it streams in real-time
+- ✅ Automatically scrolls during:
+  - Model responses streaming
+  - Evaluation sections appearing (agree/disagree)
+  - Final consensus synthesis
+  - Evolution of Consensus (progression summary)
+- ✅ Persists user preference to localStorage
 
-### 1. Project Initialization
-- ✅ Next.js 15 with TypeScript and Tailwind CSS
-- ✅ AI SDK v5 dependencies installed (Anthropic, OpenAI, Google)
-- ✅ NextAuth.js v5 for authentication
-- ✅ Project structure created
-- ✅ Git repository initialized
-- ✅ Pushed to GitHub: https://github.com/niftymonkey/ai-consensus
-- ✅ Database schema created (`schema.sql`)
+**Smart Pause/Resume:**
+- ✅ Auto-scroll disables when user scrolls up (e.g., to click Cancel, read previous rounds)
+- ✅ Auto-scroll disables when clicking on previous rounds
+- ✅ Auto-scroll disables when expanding/collapsing accordions
+- ✅ Floating toggle button at bottom-right to manually enable/disable
+- ✅ Re-enabling auto-scroll jumps to currently running round content
+- ✅ Programmatic scrolls ignored (prevents auto-scroll from disabling itself)
 
-### 2. Authentication System (NextAuth.js)
-- ✅ NextAuth configuration with Google & Discord OAuth providers
-- ✅ Database integration for user creation/updates
-- ✅ JWT session strategy with user ID tracking
-- ✅ Route protection middleware (protects `/api/chat` and `/settings`)
-- ✅ User menu component with sign-in/sign-out functionality
-- ✅ Using NextAuth built-in sign-in pages (no custom UI needed)
-- ✅ `.env.local` created with `NEXTAUTH_SECRET`
-- ✅ App runs without errors on `http://localhost:3000`
+**Files Created:**
+- `hooks/use-auto-scroll.ts` - Custom hook managing scroll behavior and state
+- `components/consensus/auto-scroll-toggle.tsx` - Floating toggle button with tooltip
 
-### 3. UI Components
-- ✅ Homepage with model showcase
-- ✅ Settings page (placeholder)
-- ✅ User menu in header
-- ✅ SessionProvider wrapper
-- ✅ Tailwind configuration with model colors (Claude blue, GPT green, Gemini gradient)
+**Files Modified:**
+- `app/consensus/page.tsx` - Integrated auto-scroll, added scroll triggers
+- `components/consensus/rounds-panel.tsx` - Added user interaction handlers
 
-### 4. MCP Servers
-- ✅ GitHub MCP server configured globally in `~/.claude.json`
-- ✅ Available for all projects under `/home/mlo/dev`
+### Additional UX Improvements
 
-## Currently In Progress 🚧
+**Floating Status Indicator:**
+- Status message now floats at top-center, stays visible while scrolling
+- Backdrop blur and shadow for better visibility
+- Shows current processing phase at all times
 
-### Setting Up OAuth for Google Sign-In
-**Status:** Waiting for OAuth credentials from Google Cloud Console
+**Section Organization:**
+- Removed redundant "Individual Model Responses" accordion from final results
+- Final responses only shown in rounds (Model Responses accordion)
+- Reordered final sections:
+  1. Unified Consensus (full-width)
+  2. Evolution of Consensus (below)
 
-**What's Needed:**
-1. Create Google OAuth app in Google Cloud Console
-2. Get Client ID and Client Secret
-3. Add credentials to `.env.local`
-4. Test sign-in flow
+**Real-time Content Streaming:**
+- Unified Consensus section appears when synthesis starts, streams content live
+- Evolution of Consensus section appears when progression starts, streams content live
+- Both sections remain visible after completion (no disappearing)
+- Loading states shown while generating
 
-**Steps to Complete:**
-- [ ] Create Google Cloud project
-- [ ] Enable Google+ API
-- [ ] Configure OAuth consent screen
-- [ ] Create OAuth credentials
-- [ ] Add redirect URI: `http://localhost:3000/api/auth/callback/google`
-- [ ] Copy Client ID and Client Secret to `.env.local`
-- [ ] Restart dev server
-- [ ] Test sign-in
+**Visual Consistency:**
+- Added ✨ icon to "Unified Consensus" header
+- Kept 🎯 icon on "Evolution of Consensus" header
+- Consistent bullet points (•) in agreement and disagreement sections
+- Consistent spacing (mb-2) in all section headers
+- Simplified "Key Differences" section: always shows ⚠️ icon and "Key Differences" title (removed dynamic variations)
 
-## What's NOT Done Yet ⏳
+**Round Navigation:**
+- Currently running round is now clickable (not just completed rounds)
+- Clicking rounds properly disables auto-scroll
+- Re-enabling auto-scroll programmatically selects current round
 
-### Phase 1: Complete Authentication (Current Focus)
-- ⏳ Google OAuth setup (in progress)
-- ⏳ Optional: Discord OAuth setup
-- ⏳ Vercel Postgres database setup
-- ⏳ Run `schema.sql` to create database tables
-- ⏳ Test full sign-in flow with database
+**Settings:**
+- Detailed Analysis accordion open by default in rounds (better visibility)
 
-### Phase 2: API Key Management
-- ⏳ Encryption utilities (`lib/encryption.ts`)
-- ⏳ Database helpers for API key CRUD (`lib/db.ts`)
-- ⏳ Settings page with API key forms
-- ⏳ Server Actions for saving/updating/deleting keys
-- ⏳ Validation and error handling
+## Technical Implementation
 
-### Phase 3: Consensus Workflow (Core Feature)
-- ⏳ Custom message types (`lib/types.ts`)
-- ⏳ Consensus algorithm implementation (`lib/consensus-workflow.ts`)
-- ⏳ Chat API endpoint (`app/api/chat/route.ts`)
-- ⏳ Parallel model responses
-- ⏳ Consensus evaluation logic
-- ⏳ Iterative refinement with max rounds
+### Auto-scroll Hook Architecture
+```typescript
+// State management
+- enabled: localStorage-persisted preference
+- isUserScrolling: tracks manual scroll detection
+- ignoreScrollEventsRef: prevents programmatic scroll from triggering pause
 
-### Phase 4: Chat UI
-- ⏳ Chat interface component
-- ⏳ Message display with custom parts
-- ⏳ Model response cards
-- ⏳ Consensus meter visualization
-- ⏳ Chat input component
-- ⏳ Streaming support
+// Key functions
+- scrollToBottom(): smooth scroll to page bottom (with event ignoring)
+- pauseAutoScroll(): disables auto-scroll on user interaction
+- resumeAutoScroll(): re-enables + scrolls to current content
+- toggleEnabled(): simple enable/disable toggle
+```
 
-### Phase 5: Deployment
-- ⏳ Deploy to Vercel
-- ⏳ Set up production environment variables
-- ⏳ Configure production OAuth redirect URIs
-- ⏳ Set up Vercel Postgres (production)
+### Scroll Trigger System
+Uses counter-based triggering on stream events:
+- `model-response` → increment scroll trigger
+- `evaluation` → increment scroll trigger
+- `synthesis-start` → increment scroll trigger
+- `synthesis-chunk` → increment scroll trigger
+- `progression-summary-start` → increment scroll trigger
+- `progression-summary-chunk` → increment scroll trigger
 
-## Environment Setup Status
+### Round Selection on Resume
+When re-enabling auto-scroll:
+1. Parent sets `shouldResetToCurrentRound` flag
+2. RoundsPanel detects change and selects current round
+3. Browser scrolls to show selected round content
+4. Auto-scroll resumes from that position
 
-### Required for Development
-| Variable | Status | Notes |
-|----------|--------|-------|
-| `NEXTAUTH_URL` | ✅ Set | `http://localhost:3000` |
-| `NEXTAUTH_SECRET` | ✅ Set | Generated with OpenSSL |
-| `GOOGLE_CLIENT_ID` | ⏳ Needed | Waiting for Google OAuth setup |
-| `GOOGLE_CLIENT_SECRET` | ⏳ Needed | Waiting for Google OAuth setup |
-| `DISCORD_CLIENT_ID` | ❌ Not set | Optional for now |
-| `DISCORD_CLIENT_SECRET` | ❌ Not set | Optional for now |
-| `POSTGRES_URL` | ❌ Not set | Needed for database |
-| `ENCRYPTION_KEY` | ❌ Not set | Needed for API key storage |
+## User Experience Flow
 
-### Optional (For Testing/Demo)
-| Variable | Status | Notes |
-|----------|--------|-------|
-| `ANTHROPIC_API_KEY` | ❌ Not set | Optional fallback |
-| `OPENAI_API_KEY` | ❌ Not set | Optional fallback |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | ❌ Not set | Optional fallback |
-| `GITHUB_PERSONAL_ACCESS_TOKEN` | ❌ Not set | For GitHub MCP server |
+**Typical Session:**
+1. User starts consensus → auto-scroll enabled, following content
+2. User scrolls up to read Round 1 → auto-scroll disables automatically
+3. Toggle button shows outline (disabled state)
+4. User clicks toggle → jumps to Round 3 (current), auto-scroll resumes
+5. Round 3 completes, Round 4 starts → auto-scroll continues (stays enabled)
+6. Synthesis begins → Unified Consensus section appears, streams content
+7. Progression begins → Evolution of Consensus section appears, streams content
+8. Both final sections remain visible after completion
 
-## How to Test Current State
+## Testing Checklist
 
-1. **Start dev server:**
-   ```bash
-   cd /home/mlo/dev/ai-consensus
-   pnpm dev
-   ```
+- [x] Auto-scroll follows streaming rounds content
+- [x] Auto-scroll follows evaluation sections (agree/disagree)
+- [x] Auto-scroll follows synthesis streaming
+- [x] Auto-scroll follows progression summary streaming
+- [x] Scrolling up disables auto-scroll
+- [x] Clicking rounds disables auto-scroll
+- [x] Toggle button re-enables and scrolls to current round
+- [x] Auto-scroll stays enabled when moving between rounds
+- [x] Currently running round is clickable
+- [x] Floating status indicator stays visible while scrolling
+- [x] Final sections appear when phase starts (not when complete)
+- [x] Final sections stream content in real-time
+- [x] Final sections remain visible after completion
+- [x] Consistent bullets and spacing in agree/disagree sections
 
-2. **Visit:** http://localhost:3000
+## Files Changed
 
-3. **What works:**
-   - Homepage loads
-   - "Sign In" link works
-   - Redirects to `/api/auth/signin`
-   - NextAuth sign-in page displays
+**New Files:**
+- `hooks/use-auto-scroll.ts`
+- `components/consensus/auto-scroll-toggle.tsx`
 
-4. **What doesn't work (expected):**
-   - Google/Discord sign-in buttons (no OAuth credentials)
-   - Protected routes (no database)
-   - Settings page (not implemented)
-   - Chat functionality (not implemented)
+**Modified Files:**
+- `app/consensus/page.tsx`
+- `components/consensus/rounds-panel.tsx`
+- `components/consensus/dual-view.tsx`
+- `components/consensus/progression-summary.tsx`
 
-## Git Status
+## Related Issues
 
-**Branches:**
-- `main` - Initial project setup
-- `feat/authentication` - Current working branch (authentication system)
+- Closes #17 (Auto-scroll behavior)
+- Related to #22 (Settings panel - completed in Phase 2)
+- Part of UX Improvements plan (plans/ux-improvements.md)
 
-**Remote:** https://github.com/niftymonkey/ai-consensus
+## Next Steps
 
-**Commits:**
-- Initial project setup with placeholder pages
-- Authentication system implementation
-
-## Next Immediate Actions
-
-1. **Complete Google OAuth setup** (current blocker)
-2. **Set up Vercel Postgres database**
-3. **Test full authentication flow**
-4. **Merge `feat/authentication` to `main`**
-5. **Start API key management implementation**
-
-## Notes
-
-- Using NextAuth built-in pages for quick prototyping (can customize later)
-- JWT session strategy (simpler than database sessions for prototype)
-- GitHub MCP server configured globally (available in all projects)
-- Following conventional commits format
-- Testing before committing (per CLAUDE.md instructions)
+- User testing and feedback on auto-scroll behavior
+- Consider Phase 4: Additional Mobile Optimizations (if needed)
+- Address any other GitHub issues

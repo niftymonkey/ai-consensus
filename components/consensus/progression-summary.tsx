@@ -10,8 +10,6 @@ interface ProgressionSummaryProps {
 }
 
 export function ProgressionSummary({ progressionSummary, isStreaming = false }: ProgressionSummaryProps) {
-  if (!progressionSummary && !isStreaming) return null;
-
   return (
     <Card>
       <CardHeader>
@@ -24,10 +22,9 @@ export function ProgressionSummary({ progressionSummary, isStreaming = false }: 
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {isStreaming && !progressionSummary && (
+        {!progressionSummary ? (
           <p className="text-muted-foreground animate-pulse">Analyzing how consensus evolved...</p>
-        )}
-        {progressionSummary && (
+        ) : (
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}

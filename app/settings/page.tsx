@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { SettingsHeader } from "@/components/settings/settings-header";
 import { APIKeyInput } from "@/components/settings/api-key-input";
 import { SecurityNotice } from "@/components/settings/security-notice";
@@ -10,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [keys, setKeys] = useState({
     anthropic: "",
     openai: "",
@@ -58,6 +60,9 @@ export default function SettingsPage() {
         return;
       }
 
+      // Check if this is the first time adding keys (all maskedKeys are null)
+      const isFirstTime = Object.values(maskedKeys).every(key => key === null);
+
       for (const [provider, apiKey] of keysToSave) {
         const response = await fetch("/api/keys", {
           method: "POST",
@@ -73,6 +78,19 @@ export default function SettingsPage() {
       setMessage({ type: "success", text: "API keys saved successfully!" });
       setKeys({ anthropic: "", openai: "", google: "" });
       await fetchKeys();
+
+      // Set a flag in localStorage to trigger refetch on other pages
+      localStorage.setItem("apiKeysUpdated", Date.now().toString());
+
+      // Trigger a router refresh to invalidate cached data
+      router.refresh();
+
+      // First-time only: auto-redirect to consensus page after brief delay
+      if (isFirstTime) {
+        setTimeout(() => {
+          router.push("/consensus");
+        }, 1500);
+      }
     } catch (error) {
       console.error("Error saving keys:", error);
       setMessage({ type: "error", text: "Failed to save API keys. Please try again." });
