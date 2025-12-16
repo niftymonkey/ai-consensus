@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { SettingsHeader } from "@/components/settings/settings-header";
 import { APIKeyInput } from "@/components/settings/api-key-input";
 import { SecurityNotice } from "@/components/settings/security-notice";
@@ -10,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [keys, setKeys] = useState({
     anthropic: "",
     openai: "",
@@ -73,6 +75,12 @@ export default function SettingsPage() {
       setMessage({ type: "success", text: "API keys saved successfully!" });
       setKeys({ anthropic: "", openai: "", google: "" });
       await fetchKeys();
+
+      // Set a flag in localStorage to trigger refetch on other pages
+      localStorage.setItem("apiKeysUpdated", Date.now().toString());
+
+      // Trigger a router refresh to invalidate cached data
+      router.refresh();
     } catch (error) {
       console.error("Error saving keys:", error);
       setMessage({ type: "error", text: "Failed to save API keys. Please try again." });

@@ -1,45 +1,20 @@
-import { auth } from "@/lib/auth";
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { auth } from '@/lib/auth'
 
-export default auth((req) => {
-  const isLoggedIn = !!req.auth;
-  const { pathname } = req.nextUrl;
+export async function proxy(request: NextRequest) {
+  const session = await auth()
 
-  // Protected routes
-  const protectedRoutes = ["/api/chat", "/api/keys", "/settings"];
-  const isProtectedRoute = protectedRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
-
-  if (isProtectedRoute && !isLoggedIn) {
-    // Redirect to custom sign-in page
-    const loginUrl = new URL("/signin", req.url);
-    loginUrl.searchParams.set("callbackUrl", pathname);
-    return NextResponse.redirect(loginUrl);
+  // Protect /consensus and /settings routes
+  if (!session && (request.nextUrl.pathname.startsWith('/consensus') || request.nextUrl.pathname.startsWith('/settings'))) {
+    const signInUrl = new URL('/api/auth/signin', request.url)
+    signInUrl.searchParams.set('callbackUrl', request.url)
+    return NextResponse.redirect(signInUrl)
   }
 
-  const response = NextResponse.next();
-
-  // Add CSP headers for production
-  const cspHeader = `
-    default-src 'self';
-    script-src 'self' 'unsafe-eval' 'unsafe-inline';
-    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-    img-src 'self' blob: data: https://lh3.googleusercontent.com https://cdn.discordapp.com;
-    font-src 'self' https://fonts.gstatic.com;
-    connect-src 'self' https://generativelanguage.googleapis.com https://api.openai.com https://api.anthropic.com;
-    object-src 'none';
-    base-uri 'self';
-    form-action 'self' https://accounts.google.com https://discord.com;
-    frame-ancestors 'none';
-    upgrade-insecure-requests;
-  `.replace(/\s{2,}/g, ' ').trim();
-
-  response.headers.set('Content-Security-Policy', cspHeader);
-
-  return response;
-});
+  return NextResponse.next()
+}
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
-};
+  matcher: ['/consensus/:path*', '/settings/:path*']
+}

@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { ChatHeader } from "@/components/chat/chat-header";
 import { ChatInput } from "@/components/chat/chat-input";
 import { NoKeysAlert } from "@/components/chat/no-keys-alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ConsensusSettings } from "@/components/consensus/consensus-settings";
+import { SettingsPanel } from "@/components/consensus/settings-panel";
 import { RoundsPanel } from "@/components/consensus/rounds-panel";
 import { DualView } from "@/components/consensus/dual-view";
-import { ModelSelector } from "@/components/consensus/model-selector";
+import { AutoScrollToggle } from "@/components/consensus/auto-scroll-toggle";
 import { useAvailableModels } from "@/hooks/use-available-models";
+import { useAutoScroll } from "@/hooks/use-auto-scroll";
 import { Loader2 } from "lucide-react";
 import type {
   ModelSelection,
@@ -29,7 +30,28 @@ export default function ConsensusPage() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Use the new hook to fetch available models
-  const { models: availableModels, hasKeys: availableKeys, isLoading: modelsLoading } = useAvailableModels();
+  const { models: availableModels, hasKeys: availableKeys, isLoading: modelsLoading, refetch } = useAvailableModels();
+
+  // Check for API key updates and refetch if needed
+  useEffect(() => {
+    const checkForKeyUpdates = () => {
+      const lastUpdate = localStorage.getItem("apiKeysUpdated");
+      const lastCheck = localStorage.getItem("apiKeysLastCheck");
+
+      if (lastUpdate && lastUpdate !== lastCheck) {
+        // Keys were updated since last check - refetch models
+        console.log("API keys were updated, refetching available models...");
+        refetch();
+        localStorage.setItem("apiKeysLastCheck", lastUpdate);
+      }
+    };
+
+    checkForKeyUpdates();
+
+    // Also check when window gains focus (user might have saved keys in another tab)
+    window.addEventListener("focus", checkForKeyUpdates);
+    return () => window.removeEventListener("focus", checkForKeyUpdates);
+  }, [refetch]);
 
   // Settings
   const [maxRounds, setMaxRounds] = useState(3);
@@ -52,12 +74,35 @@ export default function ConsensusPage() {
   const [isGeneratingProgression, setIsGeneratingProgression] = useState(false);
   const [overallStatus, setOverallStatus] = useState<string | null>(null);
 
+  // Counter to trigger auto-scroll on content updates
+  const [scrollTrigger, setScrollTrigger] = useState(0);
+
+  // Flag to reset rounds panel to current round
+  const [shouldResetToCurrentRound, setShouldResetToCurrentRound] = useState(false);
+
   // Use refs to track latest values for event handling (avoids stale closures)
   const currentEvaluationRef = useRef<Partial<ConsensusEvaluation> | null>(null);
   const currentRoundResponsesRef = useRef<Map<string, string>>(new Map());
   const currentRoundRef = useRef<number>(0);
   const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Auto-scroll hook
+  const { scrollToBottom, enabled: autoScrollEnabled, isUserScrolling, toggleEnabled, pauseAutoScroll, resumeAutoScroll } = useAutoScroll();
+
+  // Handler to resume auto-scroll and scroll to current round
+  const handleResumeAutoScroll = useCallback(() => {
+    // First, trigger the rounds panel to select the current round
+    setShouldResetToCurrentRound(true);
+
+    // Reset the flag after a brief moment so it can be triggered again later
+    setTimeout(() => {
+      setShouldResetToCurrentRound(false);
+    }, 100);
+
+    // Then resume auto-scroll
+    resumeAutoScroll();
+  }, [resumeAutoScroll]);
 
   // Initialize default models when available models are loaded
   useEffect(() => {
@@ -128,6 +173,14 @@ export default function ConsensusPage() {
     }
   }, [availableModels]);
 
+  // Auto-scroll: Trigger scroll when scrollTrigger increments
+  useEffect(() => {
+    if (scrollTrigger > 0 && (isProcessing || isSynthesizing || isGeneratingProgression)) {
+      // Small delay to allow DOM to render new content
+      setTimeout(() => scrollToBottom(), 50);
+    }
+  }, [scrollTrigger, isProcessing, isSynthesizing, isGeneratingProgression, scrollToBottom]);
+
   function handleCancel() {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -170,6 +223,9 @@ export default function ConsensusPage() {
     setIsSynthesizing(false);
     setIsGeneratingProgression(false);
     setOverallStatus(null);
+
+    // Re-enable auto-scroll when starting a new consensus request
+    resumeAutoScroll();
 
     // Create abort controller for this request
     abortControllerRef.current = new AbortController();
@@ -297,6 +353,8 @@ export default function ConsensusPage() {
         });
         // Update status to show which model is responding
         setOverallStatus(`Round ${event.data.round}: Receiving responses from models...`);
+        // Trigger auto-scroll for streaming responses
+        setScrollTrigger(prev => prev + 1);
         break;
 
       case "evaluation": {
@@ -332,6 +390,8 @@ export default function ConsensusPage() {
         };
         setCurrentEvaluation(evaluationData);
         currentEvaluationRef.current = evaluationData;
+        // Trigger auto-scroll for evaluation (agree/disagree sections)
+        setScrollTrigger(prev => prev + 1);
         break;
       }
 
@@ -379,22 +439,30 @@ export default function ConsensusPage() {
         setIsSynthesizing(true);
         setFinalConsensus("");
         setOverallStatus("Synthesizing final consensus response...");
+        // Trigger auto-scroll when final results section appears
+        setScrollTrigger(prev => prev + 1);
         break;
 
       case "synthesis-chunk":
         setFinalConsensus((prev) => (prev || "") + event.content);
         setOverallStatus("Generating final consensus...");
+        // Trigger auto-scroll for streaming consensus
+        setScrollTrigger(prev => prev + 1);
         break;
 
       case "progression-summary-start":
         setIsGeneratingProgression(true);
         setProgressionSummary("");
         setOverallStatus("Analyzing how consensus evolved...");
+        // Trigger auto-scroll when Evolution of Consensus section appears
+        setScrollTrigger(prev => prev + 1);
         break;
 
       case "progression-summary-chunk":
         setProgressionSummary((prev) => (prev || "") + event.content);
         setOverallStatus("Generating progression summary...");
+        // Trigger auto-scroll for streaming progression summary
+        setScrollTrigger(prev => prev + 1);
         break;
 
       case "final-responses":
@@ -461,21 +529,30 @@ export default function ConsensusPage() {
 
   return (
     <div className="container py-12">
-      <div className="space-y-10">
-        {/* Overall Status Indicator */}
-        {overallStatus && (
-          <div className="mx-auto w-full max-w-[80%]">
-            <div className="flex items-center justify-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-6 py-4 dark:border-blue-900 dark:bg-blue-950/20">
+      {/* Floating Status Indicator */}
+      {overallStatus && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-40 w-full max-w-md px-4">
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-6 py-3 shadow-lg dark:border-blue-900 dark:bg-blue-950/95 backdrop-blur-sm">
+            <div className="flex items-center gap-3">
               <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" />
-              <span className="text-base font-medium text-blue-900 dark:text-blue-100">
+              <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
                 {overallStatus}
               </span>
             </div>
+            <button
+              onClick={handleCancel}
+              className="text-sm font-medium text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-100 transition-colors"
+            >
+              Cancel
+            </button>
           </div>
-        )}
+        </div>
+      )}
+
+      <div className="space-y-10">
 
         {/* Input */}
-        <div className="mx-auto w-full max-w-[80%]">
+        <div className="mx-auto w-full max-w-4xl">
           <ChatInput
             prompt={prompt}
             setPrompt={setPrompt}
@@ -485,31 +562,24 @@ export default function ConsensusPage() {
           />
         </div>
 
-        {/* Model Selection and Settings */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Model Selection */}
-          {availableModels && (
-            <ModelSelector
+        {/* Settings Panel */}
+        {availableModels && (
+          <div className="mx-auto w-full max-w-4xl">
+            <SettingsPanel
               availableKeys={availableKeys}
               availableModels={availableModels}
               selectedModels={selectedModels}
               setSelectedModels={setSelectedModels}
+              maxRounds={maxRounds}
+              setMaxRounds={setMaxRounds}
+              consensusThreshold={consensusThreshold}
+              setConsensusThreshold={setConsensusThreshold}
+              evaluatorModel={evaluatorModel}
+              setEvaluatorModel={setEvaluatorModel}
               disabled={isProcessing}
             />
-          )}
-
-          {/* Settings */}
-          <ConsensusSettings
-            maxRounds={maxRounds}
-            setMaxRounds={setMaxRounds}
-            consensusThreshold={consensusThreshold}
-            setConsensusThreshold={setConsensusThreshold}
-            evaluatorModel={evaluatorModel}
-            setEvaluatorModel={setEvaluatorModel}
-            availableModels={availableModels}
-            disabled={isProcessing}
-          />
-        </div>
+          </div>
+        )}
 
         {/* Rounds Panel */}
         {currentRound > 0 && (
@@ -523,11 +593,13 @@ export default function ConsensusPage() {
             consensusThreshold={consensusThreshold}
             currentRoundResponses={currentRoundResponses}
             currentEvaluation={currentEvaluation}
+            onUserInteraction={pauseAutoScroll}
+            resetToCurrentRound={shouldResetToCurrentRound}
           />
         )}
 
         {/* Final Results */}
-        {showResults && (
+        {(isSynthesizing || isGeneratingProgression || showResults) && (
           <DualView
             consensusContent={finalConsensus}
             finalResponses={finalResponses}
@@ -535,9 +607,19 @@ export default function ConsensusPage() {
             isStreaming={isProcessing}
             progressionSummary={progressionSummary}
             isGeneratingProgression={isGeneratingProgression}
+            isSynthesizing={isSynthesizing}
           />
         )}
       </div>
+
+      {/* Auto-scroll toggle - show when there's content being generated */}
+      <AutoScrollToggle
+        enabled={autoScrollEnabled}
+        onToggle={toggleEnabled}
+        onResume={handleResumeAutoScroll}
+        isUserScrolling={isUserScrolling}
+        show={isProcessing || currentRound > 0}
+      />
     </div>
   );
 }
