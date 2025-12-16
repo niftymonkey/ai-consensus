@@ -8,8 +8,8 @@ import { ProgressionSummary } from "./progression-summary";
 import type { ModelSelection } from "@/lib/types";
 
 interface DualViewProps {
-  consensusContent: string;
-  finalResponses: Map<string, string>;
+  consensusContent: string | null;
+  finalResponses: Map<string, string> | null;
   selectedModels: ModelSelection[];
   isStreaming: boolean;
   progressionSummary?: string | null;
