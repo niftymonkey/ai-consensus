@@ -1,7 +1,6 @@
 import { auth } from "@/lib/auth";
 import { Hero } from "@/components/landing/hero";
 import { BenefitCards } from "@/components/landing/benefit-cards";
-import { HowItWorks } from "@/components/landing/how-it-works";
 import { CTAButtons } from "@/components/landing/cta-buttons";
 
 export const dynamic = 'force-dynamic';
@@ -17,14 +16,6 @@ export default async function Home() {
 
           <div className="mt-6 sm:mt-8">
             <BenefitCards />
-          </div>
-
-          <div className="mt-8 sm:mt-12 lg:mt-16">
-            <hr className="border-t border-border" />
-          </div>
-
-          <div className="mt-8 sm:mt-12 lg:mt-16">
-            <HowItWorks />
           </div>
 
           <div className="mt-8 sm:mt-12 lg:mt-16">
