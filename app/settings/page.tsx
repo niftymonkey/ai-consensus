@@ -60,6 +60,9 @@ export default function SettingsPage() {
         return;
       }
 
+      // Check if this is the first time adding keys (all maskedKeys are null)
+      const isFirstTime = Object.values(maskedKeys).every(key => key === null);
+
       for (const [provider, apiKey] of keysToSave) {
         const response = await fetch("/api/keys", {
           method: "POST",
@@ -81,6 +84,13 @@ export default function SettingsPage() {
 
       // Trigger a router refresh to invalidate cached data
       router.refresh();
+
+      // First-time only: auto-redirect to consensus page after brief delay
+      if (isFirstTime) {
+        setTimeout(() => {
+          router.push("/consensus");
+        }, 1500);
+      }
     } catch (error) {
       console.error("Error saving keys:", error);
       setMessage({ type: "error", text: "Failed to save API keys. Please try again." });
