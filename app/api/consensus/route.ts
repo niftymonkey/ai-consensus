@@ -14,7 +14,7 @@ import {
   updateConversationResult,
 } from "@/lib/consensus-db";
 import { searchTavily } from "@/lib/tavily";
-import { generateSearchQuery } from "@/lib/search-query-generator";
+import { generateSearchQuery, shouldSearchWeb } from "@/lib/search-query-generator";
 
 export const maxDuration = 300; // 5 minutes for multiple rounds
 export const runtime = "nodejs";
@@ -217,9 +217,17 @@ export async function POST(request: NextRequest) {
             // Search logic: Round 1 or when model requested more info
             let searchData: SearchData | null = null;
             if (enableSearch && tavilyKey) {
-              const shouldSearch =
-                currentRound === 1 ||
-                (previousEvaluation?.needsMoreInfo && previousEvaluation?.suggestedSearchQuery);
+              let shouldSearch = false;
+
+              // Round 1: Check if question needs current info
+              if (currentRound === 1) {
+                shouldSearch = await shouldSearchWeb(prompt, evaluatorKey, evaluatorProvider, evaluatorModel);
+                console.log(`[Round ${currentRound}] Search needed: ${shouldSearch}`);
+              }
+              // Subsequent rounds: Only if model requested
+              else if (previousEvaluation?.needsMoreInfo && previousEvaluation?.suggestedSearchQuery) {
+                shouldSearch = true;
+              }
 
               if (shouldSearch) {
                 try {
