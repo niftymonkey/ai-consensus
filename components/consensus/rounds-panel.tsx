@@ -73,6 +73,7 @@ interface RoundsPanelProps {
   isProcessing?: boolean;
   consensusThreshold: number;
   currentRoundResponses?: Map<string, string>;
+  currentSearchData?: import("@/lib/types").SearchData | null;
   currentEvaluation?: Partial<import("@/lib/types").ConsensusEvaluation> | null;
   onUserInteraction?: () => void;
   resetToCurrentRound?: boolean;
@@ -87,6 +88,7 @@ export function RoundsPanel({
   isProcessing = false,
   consensusThreshold,
   currentRoundResponses,
+  currentSearchData,
   currentEvaluation,
   onUserInteraction,
   resetToCurrentRound = false,
@@ -118,7 +120,7 @@ export function RoundsPanel({
 
   // Build list of all rounds including current round if it's being processed
   const allRounds = [...rounds];
-  const hasCurrentRoundData = currentRoundResponses && currentRoundResponses.size > 0;
+  const hasCurrentRoundData = (currentRoundResponses && currentRoundResponses.size > 0) || currentSearchData;
 
   // Add current round if it's being processed and not yet in rounds array
   if (isProcessing && hasCurrentRoundData && !rounds.find((r) => r.roundNumber === currentRound)) {
@@ -127,7 +129,7 @@ export function RoundsPanel({
 
     allRounds.push({
       roundNumber: currentRound,
-      responses: currentRoundResponses,
+      responses: currentRoundResponses || new Map(),
       evaluation: hasEvaluation ? {
         score: currentEvaluation.score!,
         summary: currentEvaluation.summary || "",
@@ -138,6 +140,7 @@ export function RoundsPanel({
         reasoning: currentEvaluation.reasoning || "",
         isGoodEnough: currentEvaluation.isGoodEnough || false,
       } : undefined as any, // Will be filtered out in display
+      searchData: currentSearchData || undefined,
     });
   }
 
@@ -276,6 +279,30 @@ export function RoundsPanel({
                 value={String(round.roundNumber)}
                 className="space-y-6 mt-0"
               >
+                {/* Search Results Section */}
+                {round.searchData && round.searchData.results.length > 0 && (
+                  <div className="p-3 bg-muted/20 rounded border text-xs space-y-2">
+                    <div className="text-muted-foreground">
+                      🔍 {round.searchData.query}
+                    </div>
+                    <div className="space-y-1">
+                      {round.searchData.results.slice(0, 5).map((result, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <span className="text-muted-foreground shrink-0">{i + 1}.</span>
+                          <a
+                            href={result.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline line-clamp-1 flex-1"
+                          >
+                            {result.title}
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Evaluation Section - FUN VERSION (only show if we have evaluation data) */}
                 {round.evaluation && round.evaluation.score !== undefined && round.evaluation.score !== null && (
                   <div className="space-y-4">

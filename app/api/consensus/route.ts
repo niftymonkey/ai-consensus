@@ -6,13 +6,15 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { evaluateConsensusWithStream } from "@/lib/consensus-evaluator";
-import { buildRefinementPrompt } from "@/lib/consensus-prompts";
-import type { ModelSelection, ConsensusEvaluation } from "@/lib/types";
+import { buildRefinementPrompt, buildPromptWithSearchContext } from "@/lib/consensus-prompts";
+import type { ModelSelection, ConsensusEvaluation, SearchData } from "@/lib/types";
 import {
   createConsensusConversation,
   saveConsensusRound,
   updateConversationResult,
 } from "@/lib/consensus-db";
+import { searchTavily } from "@/lib/tavily";
+import { generateSearchQuery, shouldSearchWeb } from "@/lib/search-query-generator";
 
 export const maxDuration = 300; // 5 minutes for multiple rounds
 export const runtime = "nodejs";
@@ -23,6 +25,7 @@ interface ConsensusRequest {
   maxRounds?: number;
   consensusThreshold?: number;
   evaluatorModel?: string;
+  enableSearch?: boolean;
 }
 
 /**
@@ -42,6 +45,7 @@ export async function POST(request: NextRequest) {
       maxRounds = 3,
       consensusThreshold = 80,
       evaluatorModel = "claude-3-7-sonnet-20250219",
+      enableSearch = false,
     }: ConsensusRequest = await request.json();
 
     // Validate prompt
@@ -63,12 +67,22 @@ export async function POST(request: NextRequest) {
     // Get user's API keys
     const keys = await getApiKeys(session.user.id);
 
+    // Validate Tavily key if search enabled
+    const tavilyKey = enableSearch ? keys.tavily : null;
+    if (enableSearch && !tavilyKey) {
+      return new Response(
+        JSON.stringify({ error: "Missing Tavily API key for web search. Please add your key in settings." }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     // Log request
     console.log('=== Consensus API Request ===');
     console.log('Models:', models.map(m => `${m.provider}:${m.modelId}`));
     console.log('Evaluator:', evaluatorModel);
     console.log('Max rounds:', maxRounds);
     console.log('Threshold:', consensusThreshold);
+    console.log('Search enabled:', enableSearch);
 
     // Create provider instances based on available keys
     const providerInstances = {
@@ -131,12 +145,14 @@ export async function POST(request: NextRequest) {
       async start(controller) {
         let currentRound = 0;
         let previousResponses = new Map<string, string>();
+        let previousEvaluation: ConsensusEvaluation | null = null;
         let isGoodEnough = false;
         let finalScore = 0;
         const allRoundsData: Array<{
           round: number;
           responses: Map<string, string>;
           evaluation: ConsensusEvaluation;
+          searchData?: SearchData;
         }> = [];
 
         // Helper: safely enqueue data, checking if request was aborted
@@ -198,6 +214,81 @@ export async function POST(request: NextRequest) {
               )
             )) return;
 
+            // Search logic: Round 1 or when model requested more info
+            let searchData: SearchData | null = null;
+            if (enableSearch && tavilyKey) {
+              let shouldSearch = false;
+
+              // Round 1: Check if question needs current info
+              if (currentRound === 1) {
+                shouldSearch = await shouldSearchWeb(prompt, evaluatorKey, evaluatorProvider, evaluatorModel);
+                console.log(`[Round ${currentRound}] Search needed: ${shouldSearch}`);
+              }
+              // Subsequent rounds: Only if model requested
+              else if (previousEvaluation?.needsMoreInfo && previousEvaluation?.suggestedSearchQuery) {
+                shouldSearch = true;
+              }
+
+              if (shouldSearch) {
+                try {
+                  // Determine search query
+                  const searchQuery = currentRound === 1
+                    ? await generateSearchQuery(prompt, evaluatorKey, evaluatorProvider, evaluatorModel)
+                    : previousEvaluation!.suggestedSearchQuery!;
+
+                  console.log(`[Round ${currentRound}] Searching: "${searchQuery}"`);
+
+                  // Stream search-start event
+                  if (!safeEnqueue(
+                    encoder.encode(
+                      JSON.stringify({
+                        type: "search-start",
+                        round: currentRound,
+                        query: searchQuery,
+                      }) + "\n"
+                    )
+                  )) return;
+
+                  // Execute search
+                  const results = await searchTavily(searchQuery, tavilyKey);
+
+                  searchData = {
+                    query: searchQuery,
+                    results,
+                    round: currentRound,
+                    triggeredBy: currentRound === 1 ? 'user' : 'model',
+                  };
+
+                  console.log(`[Round ${currentRound}] Search complete: ${results.length} results`);
+
+                  // Stream search-complete event
+                  if (!safeEnqueue(
+                    encoder.encode(
+                      JSON.stringify({
+                        type: "search-complete",
+                        round: currentRound,
+                        data: searchData,
+                      }) + "\n"
+                    )
+                  )) return;
+                } catch (error) {
+                  console.error(`[Round ${currentRound}] Search error:`, error);
+
+                  // Stream search-error event (non-fatal)
+                  safeEnqueue(
+                    encoder.encode(
+                      JSON.stringify({
+                        type: "search-error",
+                        round: currentRound,
+                        error: error instanceof Error ? error.message : 'Search failed',
+                      }) + "\n"
+                    )
+                  );
+                  // Continue without search results
+                }
+              }
+            }
+
             // Generate responses from all selected models
             const roundResponses = await generateRoundResponses({
               prompt: currentRound === 1 ? prompt : null,
@@ -209,6 +300,7 @@ export async function POST(request: NextRequest) {
               encoder,
               round: currentRound,
               signal: request.signal,
+              searchData: searchData || undefined,
             });
 
             // Check if aborted after generating responses
@@ -251,7 +343,8 @@ export async function POST(request: NextRequest) {
                       }) + "\n"
                     )
                   );
-                }
+                },
+                enableSearch
               );
 
               console.log(`[Round ${currentRound}] Consensus evaluation received - Score: ${evaluation.score}%, isGoodEnough: ${evaluation.isGoodEnough}`);
@@ -290,14 +383,19 @@ export async function POST(request: NextRequest) {
 
             // Debug logging
             console.log(`[Round ${currentRound}] Score: ${evaluation.score}, Threshold: ${consensusThreshold}, LLM isGoodEnough: ${evaluation.isGoodEnough}, Final isGoodEnough: ${isGoodEnough}`);
+            if (evaluation.needsMoreInfo) {
+              console.log(`[Round ${currentRound}] Model requested more info: "${evaluation.suggestedSearchQuery}"`);
+            }
 
             previousResponses = roundResponses;
+            previousEvaluation = evaluation;
 
             // Store round data for progression summary
             allRoundsData.push({
               round: currentRound,
               responses: new Map(roundResponses),
               evaluation: evaluation,
+              searchData: searchData || undefined,
             });
 
             // Save round to database
@@ -495,6 +593,7 @@ async function generateRoundResponses(opts: {
   encoder: TextEncoder;
   round: number;
   signal: AbortSignal;
+  searchData?: SearchData;
 }): Promise<Map<string, string>> {
   const responses = new Map<string, string>();
 
@@ -525,7 +624,7 @@ async function generateRoundResponses(opts: {
 
     try {
       // Build prompt (initial or refinement)
-      const promptText = opts.prompt
+      let promptText = opts.prompt
         ? opts.prompt // Round 1
         : buildRefinementPrompt(
             // Round 2+
@@ -537,6 +636,11 @@ async function generateRoundResponses(opts: {
             opts.selectedModels,
             opts.round
           );
+
+      // Inject search context if available
+      if (opts.searchData) {
+        promptText = buildPromptWithSearchContext(promptText, opts.searchData.results);
+      }
 
       const result = streamText({
         model: provider(modelSelection.modelId),

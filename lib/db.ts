@@ -1,7 +1,7 @@
 import { sql } from "@vercel/postgres";
 import { encrypt, decrypt } from "./encryption";
 
-export type Provider = "anthropic" | "openai" | "google";
+export type Provider = "anthropic" | "openai" | "google" | "tavily";
 
 export interface ApiKey {
   id: number;
@@ -51,6 +51,7 @@ export async function getApiKeys(
     anthropic: null,
     openai: null,
     google: null,
+    tavily: null,
   };
 
   for (const row of result.rows) {
@@ -119,6 +120,7 @@ export async function hasApiKeys(
     anthropic: false,
     openai: false,
     google: false,
+    tavily: false,
   };
 
   for (const row of result.rows) {

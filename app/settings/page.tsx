@@ -16,11 +16,13 @@ export default function SettingsPage() {
     anthropic: "",
     openai: "",
     google: "",
+    tavily: "",
   });
   const [maskedKeys, setMaskedKeys] = useState({
     anthropic: null as string | null,
     openai: null as string | null,
     google: null as string | null,
+    tavily: null as string | null,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -76,7 +78,7 @@ export default function SettingsPage() {
       }
 
       setMessage({ type: "success", text: "API keys saved successfully!" });
-      setKeys({ anthropic: "", openai: "", google: "" });
+      setKeys({ anthropic: "", openai: "", google: "", tavily: "" });
       await fetchKeys();
 
       // Set a flag in localStorage to trigger refetch on other pages
@@ -118,6 +120,7 @@ export default function SettingsPage() {
                 <Skeleton className="h-20 w-full" />
                 <Skeleton className="h-20 w-full" />
                 <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-20 w-full" />
               </div>
             ) : (
               <>
@@ -152,6 +155,17 @@ export default function SettingsPage() {
                   docsUrl="https://aistudio.google.com/app/apikey"
                   colorClass="bg-accent"
                   onChange={(value) => setKeys({ ...keys, google: value })}
+                />
+
+                <APIKeyInput
+                  provider="tavily"
+                  displayName="Tavily (Web Search)"
+                  value={keys.tavily}
+                  maskedKey={maskedKeys.tavily}
+                  placeholder="tvly-..."
+                  docsUrl="https://tavily.com"
+                  colorClass="bg-blue-500"
+                  onChange={(value) => setKeys({ ...keys, tavily: value })}
                 />
               </>
             )}

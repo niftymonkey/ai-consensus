@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { ChevronDown, ChevronUp, Settings as SettingsIcon } from "lucide-react";
+import Link from "next/link";
 import { ModelSelector } from "./model-selector";
 import { ConsensusSettings } from "./consensus-settings";
 import type { ModelSelection } from "@/lib/types";
@@ -13,6 +16,7 @@ interface AvailableKeys {
   anthropic: boolean;
   openai: boolean;
   google: boolean;
+  tavily: boolean;
 }
 
 interface ConsensusPreferences {
@@ -20,6 +24,7 @@ interface ConsensusPreferences {
   maxRounds: number;
   threshold: number;
   evaluatorModel: string;
+  enableSearch: boolean;
   lastUpdated: number;
 }
 
@@ -34,6 +39,8 @@ interface SettingsPanelProps {
   setConsensusThreshold: (value: number) => void;
   evaluatorModel: string;
   setEvaluatorModel: (value: string) => void;
+  enableSearch: boolean;
+  setEnableSearch: (value: boolean) => void;
   disabled?: boolean;
 }
 
@@ -50,6 +57,8 @@ export function SettingsPanel({
   setConsensusThreshold,
   evaluatorModel,
   setEvaluatorModel,
+  enableSearch,
+  setEnableSearch,
   disabled = false,
 }: SettingsPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
@@ -79,6 +88,10 @@ export function SettingsPanel({
         setMaxRounds(prefs.maxRounds);
         setConsensusThreshold(prefs.threshold);
         setEvaluatorModel(prefs.evaluatorModel);
+        // Only restore enableSearch if Tavily key is still available
+        if (prefs.enableSearch !== undefined && availableKeys.tavily) {
+          setEnableSearch(prefs.enableSearch);
+        }
 
         // Collapse by default if preferences exist
         setIsExpanded(false);
@@ -103,6 +116,7 @@ export function SettingsPanel({
         maxRounds,
         threshold: consensusThreshold,
         evaluatorModel,
+        enableSearch,
         lastUpdated: Date.now(),
       };
 
@@ -117,7 +131,8 @@ export function SettingsPanel({
   // Generate summary text for collapsed state
   const getSummary = () => {
     const modelCount = selectedModels.length;
-    return `${modelCount} model${modelCount !== 1 ? 's' : ''}, ${maxRounds} round${maxRounds !== 1 ? 's' : ''}, ${consensusThreshold}% threshold`;
+    const searchStatus = enableSearch ? 'search on' : 'search off';
+    return `${modelCount} model${modelCount !== 1 ? 's' : ''}, ${maxRounds} round${maxRounds !== 1 ? 's' : ''}, ${consensusThreshold}% threshold, ${searchStatus}`;
   };
 
   if (!isExpanded) {
@@ -183,6 +198,30 @@ export function SettingsPanel({
             setEvaluatorModel={setEvaluatorModel}
             availableModels={availableModels}
             disabled={disabled}
+          />
+        </div>
+
+        <div className="flex items-center justify-between p-4 border rounded-lg">
+          <div className="space-y-1">
+            <Label htmlFor="enable-search">Enable Web Search</Label>
+            <p className="text-xs text-muted-foreground">
+              {availableKeys.tavily ? (
+                "Provides models with current web information"
+              ) : (
+                <>
+                  <Link href="/settings" className="underline">
+                    Add Tavily API key
+                  </Link>{" "}
+                  to enable
+                </>
+              )}
+            </p>
+          </div>
+          <Switch
+            id="enable-search"
+            checked={enableSearch}
+            onCheckedChange={setEnableSearch}
+            disabled={disabled || !availableKeys.tavily}
           />
         </div>
 
