@@ -88,7 +88,8 @@ export function SettingsPanel({
         setMaxRounds(prefs.maxRounds);
         setConsensusThreshold(prefs.threshold);
         setEvaluatorModel(prefs.evaluatorModel);
-        if (prefs.enableSearch !== undefined) {
+        // Only restore enableSearch if Tavily key is still available
+        if (prefs.enableSearch !== undefined && availableKeys.tavily) {
           setEnableSearch(prefs.enableSearch);
         }
 
