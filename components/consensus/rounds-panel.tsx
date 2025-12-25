@@ -282,11 +282,8 @@ export function RoundsPanel({
                 {/* Search Results Section */}
                 {round.searchData && round.searchData.results.length > 0 && (
                   <div className="p-3 bg-muted/20 rounded border text-xs space-y-2">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <span>🔍 {round.searchData.query}</span>
-                      {round.searchData.triggeredBy === 'model' && (
-                        <Badge variant="outline" className="text-[10px] h-4">LLM</Badge>
-                      )}
+                    <div className="text-muted-foreground">
+                      🔍 {round.searchData.query}
                     </div>
                     <div className="space-y-1">
                       {round.searchData.results.slice(0, 5).map((result, i) => (
