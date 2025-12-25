@@ -47,6 +47,17 @@ export const consensusEvaluationSchema = z.object({
   isGoodEnough: z
     .boolean()
     .describe("Whether consensus is sufficient to stop iterating (true if score >= threshold)"),
+
+  // Search request fields
+  needsMoreInfo: z
+    .boolean()
+    .optional()
+    .describe("True if any model needs more current/specific information to improve their answer"),
+
+  suggestedSearchQuery: z
+    .string()
+    .optional()
+    .describe("Focused web search query if needsMoreInfo is true"),
 });
 
 export type ConsensusEvaluation = z.infer<typeof consensusEvaluationSchema>;
@@ -62,7 +73,8 @@ export async function evaluateConsensusWithStream(
   evaluatorProvider: "anthropic" | "openai" | "google",
   evaluatorModel: string,
   round: number,
-  onPartialUpdate?: (partial: Partial<ConsensusEvaluation>) => void
+  onPartialUpdate?: (partial: Partial<ConsensusEvaluation>) => void,
+  searchEnabled: boolean = false
 ): Promise<ConsensusEvaluation> {
   // Create provider instance
   const provider =
@@ -79,7 +91,7 @@ export async function evaluateConsensusWithStream(
   const result = streamObject({
     model: provider(modelId),
     schema: consensusEvaluationSchema,
-    system: buildEvaluationSystemPrompt(consensusThreshold),
+    system: buildEvaluationSystemPrompt(consensusThreshold, searchEnabled),
     prompt: buildEvaluationPrompt(responses, selectedModels, round),
   });
 

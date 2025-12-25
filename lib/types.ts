@@ -2,11 +2,20 @@
  * Shared types for the AI Consensus application
  */
 
+import type { TavilySearchResult } from "./tavily";
+
 export interface ModelSelection {
   id: string; // model-1, model-2, model-3
   provider: "anthropic" | "openai" | "google";
   modelId: string; // e.g., 'gpt-4o', 'o1-preview', 'claude-3-7-sonnet-20250219'
   label: string; // Display name: 'GPT-4o', 'O1 Preview', 'Claude Sonnet 4.5'
+}
+
+export interface SearchData {
+  query: string;
+  results: TavilySearchResult[];
+  round: number;
+  triggeredBy: 'user' | 'model';
 }
 
 export interface ConsensusEvaluation {
@@ -24,6 +33,10 @@ export interface ConsensusEvaluation {
   keyDifferences: string[];    // Reworded more dramatically
   reasoning: string;           // More conversational, less academic (collapsible)
   isGoodEnough: boolean;
+
+  // Search request fields
+  needsMoreInfo?: boolean;
+  suggestedSearchQuery?: string;
 }
 
 export interface RoundData {
@@ -31,6 +44,7 @@ export interface RoundData {
   responses: Map<string, string>; // modelId -> response text
   evaluation: ConsensusEvaluation;
   refinementPrompts?: Record<string, string>; // modelId -> prompt
+  searchData?: SearchData; // Search results used in this round
 }
 
 export interface ConsensusState {
@@ -55,6 +69,9 @@ export type ConsensusStreamEvent =
       type: "round-status";
       data: { roundNumber: number; maxRounds: number; status: string };
     }
+  | { type: "search-start"; round: number; query: string }
+  | { type: "search-complete"; round: number; data: SearchData }
+  | { type: "search-error"; round: number; error: string }
   | {
       type: "model-response";
       data: {

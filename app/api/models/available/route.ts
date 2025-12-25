@@ -29,6 +29,7 @@ export async function GET() {
       anthropic: !!keys.anthropic,
       openai: !!keys.openai,
       google: !!keys.google,
+      tavily: !!keys.tavily,
     };
 
     // Check model availability from provider APIs
@@ -86,6 +87,7 @@ export async function GET() {
       anthropic: null,
       openai: null,
       google: null,
+      tavily: null,
     }));
 
     return NextResponse.json(
@@ -105,6 +107,7 @@ export async function GET() {
           anthropic: !!keys.anthropic,
           openai: !!keys.openai,
           google: !!keys.google,
+          tavily: !!keys.tavily,
         },
         errors: { general: "Failed to check model availability" },
         fallback: true,

@@ -20,6 +20,7 @@ export async function GET() {
       anthropic: keys.anthropic ? maskApiKey(keys.anthropic) : null,
       openai: keys.openai ? maskApiKey(keys.openai) : null,
       google: keys.google ? maskApiKey(keys.google) : null,
+      tavily: keys.tavily ? maskApiKey(keys.tavily) : null,
     };
 
     return NextResponse.json({ keys: maskedKeys });
@@ -97,5 +98,5 @@ function maskApiKey(key: string): string {
  * Type guard to check if a string is a valid provider
  */
 function isValidProvider(provider: string): provider is Provider {
-  return ["anthropic", "openai", "google"].includes(provider);
+  return ["anthropic", "openai", "google", "tavily"].includes(provider);
 }

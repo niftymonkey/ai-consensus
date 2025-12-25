@@ -23,6 +23,7 @@ interface AvailableKeys {
   anthropic: boolean;
   openai: boolean;
   google: boolean;
+  tavily: boolean;
 }
 
 export default function ConsensusPage() {
@@ -57,6 +58,7 @@ export default function ConsensusPage() {
   const [maxRounds, setMaxRounds] = useState(3);
   const [consensusThreshold, setConsensusThreshold] = useState(80);
   const [evaluatorModel, setEvaluatorModel] = useState("claude-3-7-sonnet-20250219");
+  const [enableSearch, setEnableSearch] = useState(false);
 
   // Model selection (2-3 models)
   const [selectedModels, setSelectedModels] = useState<ModelSelection[]>([]);
@@ -65,6 +67,7 @@ export default function ConsensusPage() {
   const [rounds, setRounds] = useState<RoundData[]>([]);
   const [currentRound, setCurrentRound] = useState(0);
   const [currentRoundResponses, setCurrentRoundResponses] = useState<Map<string, string>>(new Map());
+  const [currentSearchData, setCurrentSearchData] = useState<import("@/lib/types").SearchData | null>(null);
   const [currentEvaluation, setCurrentEvaluation] = useState<Partial<ConsensusEvaluation> | null>(null);
   const [finalConsensus, setFinalConsensus] = useState<string | null>(null);
   const [finalResponses, setFinalResponses] = useState<Map<string, string> | null>(null);
@@ -84,6 +87,7 @@ export default function ConsensusPage() {
   const currentEvaluationRef = useRef<Partial<ConsensusEvaluation> | null>(null);
   const currentRoundResponsesRef = useRef<Map<string, string>>(new Map());
   const currentRoundRef = useRef<number>(0);
+  const currentSearchDataRef = useRef<import("@/lib/types").SearchData | null>(null);
   const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -216,6 +220,7 @@ export default function ConsensusPage() {
     setRounds([]);
     setCurrentRound(0);
     setCurrentRoundResponses(new Map());
+    setCurrentSearchData(null);
     setCurrentEvaluation(null);
     setFinalConsensus(null);
     setFinalResponses(null);
@@ -223,6 +228,9 @@ export default function ConsensusPage() {
     setIsSynthesizing(false);
     setIsGeneratingProgression(false);
     setOverallStatus(null);
+    currentRoundResponsesRef.current = new Map();
+    currentEvaluationRef.current = null;
+    currentSearchDataRef.current = null;
 
     // Re-enable auto-scroll when starting a new consensus request
     resumeAutoScroll();
@@ -250,6 +258,7 @@ export default function ConsensusPage() {
           maxRounds,
           consensusThreshold,
           evaluatorModel,
+          enableSearch,
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -341,7 +350,25 @@ export default function ConsensusPage() {
         currentRoundResponsesRef.current = new Map();
         setCurrentEvaluation(null);
         currentEvaluationRef.current = null;
+        setCurrentSearchData(null);
+        currentSearchDataRef.current = null;
         setOverallStatus(`Round ${event.data.roundNumber}: ${event.data.status}`);
+        break;
+
+      case "search-start":
+        setOverallStatus(`Round ${event.round}: Searching web for "${event.query}"...`);
+        break;
+
+      case "search-complete":
+        setOverallStatus(`Round ${event.round}: Search complete (${event.data.results.length} results)`);
+        setCurrentSearchData(event.data);
+        currentSearchDataRef.current = event.data;
+        setScrollTrigger(prev => prev + 1);
+        break;
+
+      case "search-error":
+        console.warn(`Search error in round ${event.round}:`, event.error);
+        setOverallStatus(`Round ${event.round}: Search failed, continuing without web results`);
         break;
 
       case "model-response":
@@ -412,6 +439,7 @@ export default function ConsensusPage() {
               isGoodEnough: currentEvaluationRef.current.isGoodEnough || false,
             },
             refinementPrompts: event.data,
+            searchData: currentSearchDataRef.current || undefined,
           };
           setRounds((prev) => [...prev, roundData]);
         }
@@ -433,6 +461,7 @@ export default function ConsensusPage() {
               reasoning: currentEvaluationRef.current.reasoning || "",
               isGoodEnough: currentEvaluationRef.current.isGoodEnough || false,
             },
+            searchData: currentSearchDataRef.current || undefined,
           };
           setRounds((prev) => [...prev, roundData]);
         }
@@ -576,6 +605,8 @@ export default function ConsensusPage() {
               setConsensusThreshold={setConsensusThreshold}
               evaluatorModel={evaluatorModel}
               setEvaluatorModel={setEvaluatorModel}
+              enableSearch={enableSearch}
+              setEnableSearch={setEnableSearch}
               disabled={isProcessing}
             />
           </div>
@@ -592,6 +623,7 @@ export default function ConsensusPage() {
             isProcessing={isProcessing}
             consensusThreshold={consensusThreshold}
             currentRoundResponses={currentRoundResponses}
+            currentSearchData={currentSearchData}
             currentEvaluation={currentEvaluation}
             onUserInteraction={pauseAutoScroll}
             resetToCurrentRound={shouldResetToCurrentRound}

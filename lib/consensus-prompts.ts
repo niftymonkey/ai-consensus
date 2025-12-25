@@ -1,4 +1,26 @@
 import type { ModelSelection } from "./types";
+import type { TavilySearchResult } from "./tavily";
+
+/**
+ * Build prompt with search context injected
+ */
+export function buildPromptWithSearchContext(
+  originalPrompt: string,
+  searchResults: TavilySearchResult[]
+): string {
+  const searchContext = searchResults
+    .map((result, i) => `[${i + 1}] ${result.title}\n${result.content}\nSource: ${result.url}`)
+    .join('\n\n');
+
+  return `${originalPrompt}
+
+## Recent Web Search Results
+The following information was retrieved from the web to help answer this question:
+
+${searchContext}
+
+Please incorporate relevant information from these sources in your response, citing sources where appropriate.`;
+}
 
 /**
  * Build refinement prompt for a model to refine its response based on other models' responses
@@ -85,7 +107,20 @@ Generate the consensus response:`;
 /**
  * Build evaluation system prompt with consensus threshold
  */
-export function buildEvaluationSystemPrompt(consensusThreshold: number): string {
+export function buildEvaluationSystemPrompt(
+  consensusThreshold: number,
+  searchEnabled: boolean = false
+): string {
+  const searchGuidance = searchEnabled ? `
+
+SEARCH AWARENESS:
+If any model explicitly states they need more current information, lack specific data, or are uncertain due to knowledge cutoff limitations, set needsMoreInfo: true and provide a suggestedSearchQuery that would help find the needed information.
+
+Example:
+- Model says "I don't have current data on..." → needsMoreInfo: true, suggestedSearchQuery: "current data on X 2025"
+- Model says "This requires recent statistics..." → needsMoreInfo: true, suggestedSearchQuery: "recent statistics X"
+` : '';
+
   return `You are a fun, engaging consensus evaluator who makes AI disagreements entertaining!
 
 YOUR PERSONALITY:
@@ -169,7 +204,7 @@ SCORING RULES:
 - If one model is verbose/complex and another is efficient/simple, call it out with personality!
 
 Consensus threshold: ${consensusThreshold}%
-Set isGoodEnough = true if score >= ${consensusThreshold}
+Set isGoodEnough = true if score >= ${consensusThreshold}${searchGuidance}
 
 OUTPUT FORMAT (must be valid JSON):
 {
@@ -180,7 +215,9 @@ OUTPUT FORMAT (must be valid JSON):
   "areasOfAgreement": ["<what they agree on>", "<another agreement>", "..."],
   "keyDifferences": ["<dramatic difference with personality>", "<another difference>", "..."],
   "reasoning": "<2-3 casual paragraphs explaining the score>",
-  "isGoodEnough": <boolean>
+  "isGoodEnough": <boolean>${searchEnabled ? `,
+  "needsMoreInfo": <optional boolean>,
+  "suggestedSearchQuery": "<optional string if needsMoreInfo is true>"` : ''}
 }`;
 }
 

@@ -3,7 +3,7 @@ import type { ProviderModels } from "@/lib/models";
 
 interface UseAvailableModelsReturn {
   models: ProviderModels | null;
-  hasKeys: { anthropic: boolean; openai: boolean; google: boolean } | null;
+  hasKeys: { anthropic: boolean; openai: boolean; google: boolean; tavily: boolean } | null;
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
@@ -23,6 +23,7 @@ export function useAvailableModels(): UseAvailableModelsReturn {
     anthropic: boolean;
     openai: boolean;
     google: boolean;
+    tavily: boolean;
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
