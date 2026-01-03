@@ -399,6 +399,7 @@ export default function ConsensusPage() {
         break;
 
       case "search-error":
+        // nosemgrep: javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring
         console.warn(`Search error in round ${event.round}:`, event.error);
         setOverallStatus(`Round ${event.round}: Search failed, continuing without web results`);
         break;

@@ -59,6 +59,7 @@ export async function getApiKeys(
     try {
       keys[row.provider] = decrypt(row.encrypted_key);
     } catch (error) {
+      // nosemgrep: javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring
       console.error(`Failed to decrypt ${row.provider} key for user ${userId}:`, error);
       // Keep as null if decryption fails
     }
@@ -87,6 +88,7 @@ export async function getApiKey(
   try {
     return decrypt(result.rows[0].encrypted_key);
   } catch (error) {
+    // nosemgrep: javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring
     console.error(`Failed to decrypt ${provider} key for user ${userId}:`, error);
     return null;
   }

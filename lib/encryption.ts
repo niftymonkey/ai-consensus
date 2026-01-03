@@ -53,7 +53,7 @@ export function decrypt(encryptedText: string): string {
   const authTag = combined.subarray(combined.length - AUTH_TAG_LENGTH);
   const encrypted = combined.subarray(IV_LENGTH, combined.length - AUTH_TAG_LENGTH);
 
-  const decipher = createDecipheriv(ALGORITHM, key, iv);
+  const decipher = createDecipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
   decipher.setAuthTag(authTag);
 
   let decrypted = decipher.update(encrypted.toString("base64"), "base64", "utf8");

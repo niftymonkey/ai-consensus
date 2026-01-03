@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "migrate": "tsx scripts/migrate.ts"
+    "migrate": "tsx scripts/migrate.ts",
+    "security": "docker run --rm -v \"$(pwd):/src\" semgrep/semgrep semgrep scan --config auto"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.55",
