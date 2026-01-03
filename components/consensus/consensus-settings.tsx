@@ -1,10 +1,12 @@
 "use client";
 
+import { useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator, SelectLabel, SelectGroup } from "@/components/ui/select";
-import type { ProviderModels } from "@/lib/models";
+import { ModelCombobox } from "@/components/ui/model-combobox";
+import type { OpenRouterModelWithMeta } from "@/lib/openrouter-models";
+import { groupModelsByProvider, getRecommendedEvaluatorModels } from "@/lib/openrouter-models";
 
 interface ConsensusSettingsProps {
   maxRounds: number;
@@ -13,7 +15,7 @@ interface ConsensusSettingsProps {
   setConsensusThreshold: (value: number) => void;
   evaluatorModel: string;
   setEvaluatorModel: (value: string) => void;
-  availableModels: ProviderModels | null;
+  openRouterModels: OpenRouterModelWithMeta[];
   disabled?: boolean;
 }
 
@@ -24,38 +26,34 @@ export function ConsensusSettings({
   setConsensusThreshold,
   evaluatorModel,
   setEvaluatorModel,
-  availableModels,
+  openRouterModels,
   disabled = false,
 }: ConsensusSettingsProps) {
-  // Filter out nano/mini/lite models - keep only evaluation-suitable models
-  // Use word boundaries to avoid matching "Gemini" when filtering "mini"
-  const evaluatorModels = availableModels ? [
-    ...availableModels.anthropic.filter(m => {
-      const lower = m.name.toLowerCase();
+  // Filter out nano/mini/lite/flash models - keep only evaluation-suitable models
+  const evaluatorModels = useMemo(() => {
+    return openRouterModels.filter(m => {
+      const lower = m.shortName.toLowerCase();
       return !lower.includes('nano') &&
              !lower.includes(' mini') &&
              !lower.includes('-mini') &&
-             !lower.includes('lite');
-    }),
-    ...availableModels.openai.filter(m => {
-      const lower = m.name.toLowerCase();
-      return !lower.includes('nano') &&
-             !lower.includes(' mini') &&
-             !lower.includes('-mini') &&
-             !lower.includes('lite');
-    }),
-    ...availableModels.google.filter(m => {
-      const lower = m.name.toLowerCase();
-      return !lower.includes('nano') &&
-             !lower.includes(' mini') &&
-             !lower.includes('-mini') &&
-             !lower.includes('lite');
-    }),
-  ] : [];
+             !lower.includes('lite') &&
+             !lower.includes('flash') &&
+             !lower.includes('tiny') &&
+             !lower.includes('small');
+    });
+  }, [openRouterModels]);
 
-  // Separate recommended from other models and sort alphabetically
-  const recommendedModels = evaluatorModels.filter(m => m.recommended).sort((a, b) => a.name.localeCompare(b.name));
-  const otherModels = evaluatorModels.filter(m => !m.recommended).sort((a, b) => a.name.localeCompare(b.name));
+  const groupedEvaluatorModels = useMemo(
+    () => groupModelsByProvider(evaluatorModels),
+    [evaluatorModels]
+  );
+
+  // Get dynamically computed recommended evaluator model IDs
+  // Prefers latest versions and ensures provider diversity
+  const recommendedIds = useMemo(
+    () => getRecommendedEvaluatorModels(openRouterModels),
+    [openRouterModels]
+  );
 
   return (
     <Card>
@@ -110,85 +108,16 @@ export function ConsensusSettings({
 
           {/* Evaluator Model */}
           <div className="space-y-2">
-            <Label htmlFor="evaluator-model">Evaluator Model</Label>
-            <Select
+            <Label>Evaluator Model</Label>
+            <ModelCombobox
+              models={evaluatorModels}
+              groupedModels={groupedEvaluatorModels}
               value={evaluatorModel}
               onValueChange={setEvaluatorModel}
+              placeholder="Select evaluator model..."
               disabled={disabled || evaluatorModels.length === 0}
-            >
-              <SelectTrigger id="evaluator-model">
-                <SelectValue placeholder="Select evaluator model" />
-              </SelectTrigger>
-              <SelectContent>
-                {/* Recommended models */}
-                {recommendedModels.length > 0 && (
-                  <SelectGroup>
-                    <SelectLabel>Recommended</SelectLabel>
-                    {recommendedModels.map((model) => {
-                      const isFree = model.pricing?.input === 0 && model.pricing?.output === 0;
-                      const pricingText = isFree
-                        ? 'Free ⭐'
-                        : model.pricing
-                          ? `$${model.pricing.input}/$${model.pricing.output} per 1M`
-                          : null;
-
-                      const metaParts = [
-                        model.speed ? model.speed.charAt(0).toUpperCase() + model.speed.slice(1) : null,
-                        model.costTier ? model.costTier.charAt(0).toUpperCase() + model.costTier.slice(1) : null,
-                        model.contextWindow ? `${model.contextWindow >= 1000000 ? (model.contextWindow / 1000000).toFixed(1).replace('.0', '') + 'M' : (model.contextWindow / 1000).toFixed(0) + 'K'} context` : null,
-                        pricingText,
-                      ].filter(Boolean).join(' • ');
-
-                      return (
-                        <SelectItem
-                          key={model.id}
-                          value={model.id}
-                          className="pl-6"
-                          description={model.description}
-                          metadata={metaParts}
-                        >
-                          {model.name}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectGroup>
-                )}
-
-                {/* Other models */}
-                {otherModels.length > 0 && (
-                  <SelectGroup>
-                    <SelectLabel>Other Models</SelectLabel>
-                    {otherModels.map((model) => {
-                      const isFree = model.pricing?.input === 0 && model.pricing?.output === 0;
-                      const pricingText = isFree
-                        ? 'Free ⭐'
-                        : model.pricing
-                          ? `$${model.pricing.input}/$${model.pricing.output} per 1M`
-                          : null;
-
-                      const metaParts = [
-                        model.speed ? model.speed.charAt(0).toUpperCase() + model.speed.slice(1) : null,
-                        model.costTier ? model.costTier.charAt(0).toUpperCase() + model.costTier.slice(1) : null,
-                        model.contextWindow ? `${model.contextWindow >= 1000000 ? (model.contextWindow / 1000000).toFixed(1).replace('.0', '') + 'M' : (model.contextWindow / 1000).toFixed(0) + 'K'} context` : null,
-                        pricingText,
-                      ].filter(Boolean).join(' • ');
-
-                      return (
-                        <SelectItem
-                          key={model.id}
-                          value={model.id}
-                          className="pl-6"
-                          description={model.description}
-                          metadata={metaParts}
-                        >
-                          {model.name}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectGroup>
-                )}
-              </SelectContent>
-            </Select>
+              recommendedIds={recommendedIds}
+            />
             <p className="text-xs text-muted-foreground">
               This model evaluates consensus and synthesizes the final response
             </p>

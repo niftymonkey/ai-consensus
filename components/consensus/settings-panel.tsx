@@ -7,16 +7,17 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ChevronDown, ChevronUp, Settings as SettingsIcon } from "lucide-react";
 import Link from "next/link";
-import { ModelSelector } from "./model-selector";
+import { UnifiedModelSelector } from "./unified-model-selector";
 import { ConsensusSettings } from "./consensus-settings";
 import type { ModelSelection } from "@/lib/types";
-import type { ProviderModels } from "@/lib/models";
+import type { OpenRouterModelWithMeta } from "@/lib/openrouter-models";
 
 interface AvailableKeys {
   anthropic: boolean;
   openai: boolean;
   google: boolean;
   tavily: boolean;
+  openrouter: boolean;
 }
 
 interface ConsensusPreferences {
@@ -30,7 +31,6 @@ interface ConsensusPreferences {
 
 interface SettingsPanelProps {
   availableKeys: AvailableKeys;
-  availableModels: ProviderModels;
   selectedModels: ModelSelection[];
   setSelectedModels: (models: ModelSelection[]) => void;
   maxRounds: number;
@@ -42,13 +42,16 @@ interface SettingsPanelProps {
   enableSearch: boolean;
   setEnableSearch: (value: boolean) => void;
   disabled?: boolean;
+  // OpenRouter models for the unified model selector
+  openRouterModels: OpenRouterModelWithMeta[];
+  openRouterGroupedModels: Record<string, OpenRouterModelWithMeta[]>;
+  openRouterLoading?: boolean;
 }
 
 const STORAGE_KEY = "consensusPreferences";
 
 export function SettingsPanel({
   availableKeys,
-  availableModels,
   selectedModels,
   setSelectedModels,
   maxRounds,
@@ -60,6 +63,9 @@ export function SettingsPanel({
   enableSearch,
   setEnableSearch,
   disabled = false,
+  openRouterModels,
+  openRouterGroupedModels,
+  openRouterLoading = false,
 }: SettingsPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [hasLoadedPreferences, setHasLoadedPreferences] = useState(false);
@@ -181,12 +187,13 @@ export function SettingsPanel({
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ModelSelector
-            availableKeys={availableKeys}
-            availableModels={availableModels}
+          <UnifiedModelSelector
+            models={openRouterModels}
+            groupedModels={openRouterGroupedModels}
             selectedModels={selectedModels}
             setSelectedModels={setSelectedModels}
             disabled={disabled}
+            isLoading={openRouterLoading}
           />
 
           <ConsensusSettings
@@ -196,7 +203,7 @@ export function SettingsPanel({
             setConsensusThreshold={setConsensusThreshold}
             evaluatorModel={evaluatorModel}
             setEvaluatorModel={setEvaluatorModel}
-            availableModels={availableModels}
+            openRouterModels={openRouterModels}
             disabled={disabled}
           />
         </div>

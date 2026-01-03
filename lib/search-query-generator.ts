@@ -2,16 +2,26 @@ import { generateText } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenRouterProvider } from "./openrouter";
+
+// Direct providers we support with API keys
+const DIRECT_PROVIDERS = ["anthropic", "openai", "google"] as const;
 
 /**
- * Check if a prompt requires current web information to answer well
+ * Get the appropriate model instance for a provider/model combination
+ * Handles both direct providers and OpenRouter
  */
-export async function shouldSearchWeb(
-  prompt: string,
-  apiKey: string,
-  provider: "anthropic" | "openai" | "google",
-  model: string
-): Promise<boolean> {
+function getModelInstance(apiKey: string, provider: string, model: string) {
+  const isDirectProvider = DIRECT_PROVIDERS.includes(provider as typeof DIRECT_PROVIDERS[number]);
+  const isOpenRouterModel = model.includes("/"); // OpenRouter models have format "provider/model"
+
+  // Use OpenRouter if model is in OpenRouter format or provider isn't direct
+  if (isOpenRouterModel || !isDirectProvider) {
+    const openrouterProvider = createOpenRouterProvider(apiKey);
+    return openrouterProvider.chat(model);
+  }
+
+  // Use direct provider
   const providerInstance =
     provider === "anthropic"
       ? createAnthropic({ apiKey })
@@ -19,8 +29,20 @@ export async function shouldSearchWeb(
         ? createGoogleGenerativeAI({ apiKey })
         : createOpenAI({ apiKey });
 
+  return providerInstance(model);
+}
+
+/**
+ * Check if a prompt requires current web information to answer well
+ */
+export async function shouldSearchWeb(
+  prompt: string,
+  apiKey: string,
+  provider: string,
+  model: string
+): Promise<boolean> {
   const result = await generateText({
-    model: providerInstance(model),
+    model: getModelInstance(apiKey, provider, model),
     system: `You are a search necessity evaluator. Determine if a question requires current, up-to-date web information to answer well.
 
 Answer "yes" if the question:
@@ -48,18 +70,11 @@ Return ONLY "yes" or "no", nothing else.`,
 export async function generateSearchQuery(
   prompt: string,
   apiKey: string,
-  provider: "anthropic" | "openai" | "google",
+  provider: string,
   model: string
 ): Promise<string> {
-  const providerInstance =
-    provider === "anthropic"
-      ? createAnthropic({ apiKey })
-      : provider === "google"
-        ? createGoogleGenerativeAI({ apiKey })
-        : createOpenAI({ apiKey });
-
   const result = await generateText({
-    model: providerInstance(model),
+    model: getModelInstance(apiKey, provider, model),
     system: `You are a search query generator. Given a user's question or prompt, generate a focused web search query that would find the most relevant, current information to answer the question.
 
 Guidelines:

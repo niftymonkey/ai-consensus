@@ -22,6 +22,7 @@ interface AvailableKeys {
   anthropic: boolean;
   openai: boolean;
   google: boolean;
+  openrouter: boolean;
 }
 
 export default function ChatPage() {
@@ -79,14 +80,15 @@ export default function ChatPage() {
   useEffect(() => {
     if (testMode) {
       const testScenarios: Record<string, AvailableKeys> = {
-        "none": { anthropic: false, openai: false, google: false },
-        "claude": { anthropic: true, openai: false, google: false },
-        "gpt": { anthropic: false, openai: true, google: false },
-        "gemini": { anthropic: false, openai: false, google: true },
-        "claude-gpt": { anthropic: true, openai: true, google: false },
-        "claude-gemini": { anthropic: true, openai: false, google: true },
-        "gpt-gemini": { anthropic: false, openai: true, google: true },
-        "all": { anthropic: true, openai: true, google: true },
+        "none": { anthropic: false, openai: false, google: false, openrouter: false },
+        "claude": { anthropic: true, openai: false, google: false, openrouter: false },
+        "gpt": { anthropic: false, openai: true, google: false, openrouter: false },
+        "gemini": { anthropic: false, openai: false, google: true, openrouter: false },
+        "claude-gpt": { anthropic: true, openai: true, google: false, openrouter: false },
+        "claude-gemini": { anthropic: true, openai: false, google: true, openrouter: false },
+        "gpt-gemini": { anthropic: false, openai: true, google: true, openrouter: false },
+        "all": { anthropic: true, openai: true, google: true, openrouter: false },
+        "openrouter": { anthropic: false, openai: false, google: false, openrouter: true },
       };
 
       if (testScenarios[testMode]) {
@@ -201,8 +203,11 @@ export default function ChatPage() {
     }
   }
 
-  const hasAnyKeys = availableKeys && (availableKeys.anthropic || availableKeys.openai || availableKeys.google);
-  const keyCount = availableKeys ? [availableKeys.anthropic, availableKeys.openai, availableKeys.google].filter(Boolean).length : 0;
+  const hasAnyKeys = availableKeys && (availableKeys.anthropic || availableKeys.openai || availableKeys.google || availableKeys.openrouter);
+  // With OpenRouter, user has access to all 3 model types
+  const keyCount = availableKeys
+    ? (availableKeys.openrouter ? 3 : [availableKeys.anthropic, availableKeys.openai, availableKeys.google].filter(Boolean).length)
+    : 0;
 
   // Use full model list in test mode, otherwise use filtered models from hook
   const modelsToUse = testMode

@@ -3,7 +3,7 @@ import type { ProviderModels } from "@/lib/models";
 
 interface UseAvailableModelsReturn {
   models: ProviderModels | null;
-  hasKeys: { anthropic: boolean; openai: boolean; google: boolean; tavily: boolean } | null;
+  hasKeys: { anthropic: boolean; openai: boolean; google: boolean; tavily: boolean; openrouter: boolean } | null;
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
@@ -24,6 +24,7 @@ export function useAvailableModels(): UseAvailableModelsReturn {
     openai: boolean;
     google: boolean;
     tavily: boolean;
+    openrouter: boolean;
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +34,10 @@ export function useAvailableModels(): UseAvailableModelsReturn {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch("/api/models/available");
+      // Add cache-busting parameter to ensure fresh data
+      const response = await fetch(`/api/models/available?t=${Date.now()}`, {
+        cache: 'no-store',
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to fetch models: ${response.status}`);

@@ -11,7 +11,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     <div className="min-h-screen flex flex-col">
       <header className="border-b bg-background">
         <div className="container flex h-16 items-center justify-between">
-          <Link href="/" className="text-2xl font-bold">
+          <Link href="/consensus" className="text-2xl font-bold">
             AI Consensus
           </Link>
           <div className="flex items-center gap-4">
