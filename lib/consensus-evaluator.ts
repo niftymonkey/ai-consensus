@@ -8,6 +8,35 @@ import {
   buildEvaluationPrompt,
 } from "./consensus-prompts";
 import type { ModelSelection } from "./types";
+import { createOpenRouterProvider } from "./openrouter";
+
+// Direct providers we support with API keys
+const DIRECT_PROVIDERS = ["anthropic", "openai", "google"] as const;
+
+/**
+ * Get the appropriate model instance for a provider/model combination
+ * Handles both direct providers and OpenRouter
+ */
+function getModelInstance(apiKey: string, provider: string, model: string) {
+  const isDirectProvider = DIRECT_PROVIDERS.includes(provider as typeof DIRECT_PROVIDERS[number]);
+  const isOpenRouterModel = model.includes("/"); // OpenRouter models have format "provider/model"
+
+  // Use OpenRouter if model is in OpenRouter format or provider isn't direct
+  if (isOpenRouterModel || !isDirectProvider) {
+    const openrouterProvider = createOpenRouterProvider(apiKey);
+    return openrouterProvider.chat(model);
+  }
+
+  // Use direct provider
+  const providerInstance =
+    provider === "anthropic"
+      ? createAnthropic({ apiKey })
+      : provider === "google"
+        ? createGoogleGenerativeAI({ apiKey })
+        : createOpenAI({ apiKey });
+
+  return providerInstance(model);
+}
 
 // Zod schema for consensus evaluation (enforces structure)
 export const consensusEvaluationSchema = z.object({
@@ -70,26 +99,15 @@ export async function evaluateConsensusWithStream(
   selectedModels: ModelSelection[],
   consensusThreshold: number,
   evaluatorApiKey: string,
-  evaluatorProvider: "anthropic" | "openai" | "google",
+  evaluatorProvider: string,
   evaluatorModel: string,
   round: number,
   onPartialUpdate?: (partial: Partial<ConsensusEvaluation>) => void,
   searchEnabled: boolean = false
 ): Promise<ConsensusEvaluation> {
-  // Create provider instance
-  const provider =
-    evaluatorProvider === "anthropic"
-      ? createAnthropic({ apiKey: evaluatorApiKey })
-      : evaluatorProvider === "google"
-        ? createGoogleGenerativeAI({ apiKey: evaluatorApiKey })
-        : createOpenAI({ apiKey: evaluatorApiKey });
-
-  // Use provided evaluator model
-  const modelId = evaluatorModel;
-
   // streamObject returns structured data incrementally
   const result = streamObject({
-    model: provider(modelId),
+    model: getModelInstance(evaluatorApiKey, evaluatorProvider, evaluatorModel),
     schema: consensusEvaluationSchema,
     system: buildEvaluationSystemPrompt(consensusThreshold, searchEnabled),
     prompt: buildEvaluationPrompt(responses, selectedModels, round),
@@ -143,7 +161,7 @@ export async function evaluateConsensus(
   selectedModels: ModelSelection[],
   consensusThreshold: number,
   evaluatorApiKey: string,
-  evaluatorProvider: "anthropic" | "openai" | "google",
+  evaluatorProvider: string,
   evaluatorModel: string,
   round: number
 ): Promise<ConsensusEvaluation> {

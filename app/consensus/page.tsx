@@ -9,9 +9,11 @@ import { SettingsPanel } from "@/components/consensus/settings-panel";
 import { RoundsPanel } from "@/components/consensus/rounds-panel";
 import { DualView } from "@/components/consensus/dual-view";
 import { AutoScrollToggle } from "@/components/consensus/auto-scroll-toggle";
-import { useAvailableModels } from "@/hooks/use-available-models";
+import { useModels } from "@/hooks/use-models";
 import { useAutoScroll } from "@/hooks/use-auto-scroll";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { CustomErrorToast } from "@/components/ui/custom-error-toast";
 import type {
   ModelSelection,
   RoundData,
@@ -19,19 +21,19 @@ import type {
   ConsensusEvaluation,
 } from "@/lib/types";
 
-interface AvailableKeys {
-  anthropic: boolean;
-  openai: boolean;
-  google: boolean;
-  tavily: boolean;
-}
-
 export default function ConsensusPage() {
   const [prompt, setPrompt] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Use the new hook to fetch available models
-  const { models: availableModels, hasKeys: availableKeys, isLoading: modelsLoading, refetch } = useAvailableModels();
+  // Unified model catalog with availability filtering
+  const {
+    models,
+    groupedModels,
+    hasKeys,
+    hasAnyKey,
+    isLoading: modelsLoading,
+    refetch,
+  } = useModels();
 
   // Check for API key updates and refetch if needed
   useEffect(() => {
@@ -40,8 +42,6 @@ export default function ConsensusPage() {
       const lastCheck = localStorage.getItem("apiKeysLastCheck");
 
       if (lastUpdate && lastUpdate !== lastCheck) {
-        // Keys were updated since last check - refetch models
-        console.log("API keys were updated, refetching available models...");
         refetch();
         localStorage.setItem("apiKeysLastCheck", lastUpdate);
       }
@@ -53,6 +53,23 @@ export default function ConsensusPage() {
     window.addEventListener("focus", checkForKeyUpdates);
     return () => window.removeEventListener("focus", checkForKeyUpdates);
   }, [refetch]);
+
+  // Auto-filter invalid selections whenever models list changes
+  useEffect(() => {
+    if (models.length === 0) return; // Wait for models to load
+
+    setSelectedModels(prev => {
+      const validSelections = prev.filter(selection =>
+        models.some(model => model.id === selection.modelId)
+      );
+
+      // Only update if something changed to avoid infinite loops
+      if (validSelections.length !== prev.length) {
+        return validSelections;
+      }
+      return prev;
+    });
+  }, [models]);
 
   // Settings
   const [maxRounds, setMaxRounds] = useState(3);
@@ -108,26 +125,36 @@ export default function ConsensusPage() {
     resumeAutoScroll();
   }, [resumeAutoScroll]);
 
-  // Initialize default models when available models are loaded
+  // Initialize default models when models are loaded
   useEffect(() => {
-    if (availableModels && selectedModels.length === 0) {
+    if (models.length > 0 && selectedModels.length === 0) {
       const defaultModels: ModelSelection[] = [];
 
-      if (availableModels.anthropic.length > 0) {
+      // Find a good Anthropic model (Claude Sonnet preferred)
+      const anthropicModel = models.find(
+        (m) => m.provider === "anthropic" && m.id.includes("sonnet")
+      ) || models.find((m) => m.provider === "anthropic");
+
+      // Find a good OpenAI model (GPT-4o preferred)
+      const openaiModel = models.find(
+        (m) => m.provider === "openai" && m.id.includes("gpt-4o")
+      ) || models.find((m) => m.provider === "openai");
+
+      if (anthropicModel) {
         defaultModels.push({
           id: "model-1",
           provider: "anthropic",
-          modelId: availableModels.anthropic[0].id,
-          label: availableModels.anthropic[0].name,
+          modelId: anthropicModel.id,
+          label: anthropicModel.shortName,
         });
       }
 
-      if (availableModels.openai.length > 0) {
+      if (openaiModel) {
         defaultModels.push({
           id: "model-2",
           provider: "openai",
-          modelId: availableModels.openai[0].id,
-          label: availableModels.openai[0].name,
+          modelId: openaiModel.id,
+          label: openaiModel.shortName,
         });
       }
 
@@ -136,46 +163,43 @@ export default function ConsensusPage() {
         setSelectedModels(defaultModels);
       }
     }
-  }, [availableModels, selectedModels.length]);
+  }, [models, selectedModels.length]);
 
-  // Initialize default evaluator model when available models are loaded
+  // Initialize default evaluator model when models are loaded
   useEffect(() => {
-    if (availableModels && evaluatorModel === "claude-3-7-sonnet-20250219") {
-      // Filter evaluation-suitable models (exclude nano/mini/lite)
-      const filterModels = (models: typeof availableModels.anthropic) => {
-        return models.filter(m => {
-          const lower = m.name.toLowerCase();
-          return !lower.includes('nano') &&
-                 !lower.includes(' mini') &&
-                 !lower.includes('-mini') &&
-                 !lower.includes('lite');
-        });
-      };
+    if (models.length > 0 && evaluatorModel === "claude-3-7-sonnet-20250219") {
+      // Filter evaluation-suitable models (exclude nano/mini/lite/flash)
+      const suitableModels = models.filter((m) => {
+        const lower = m.name.toLowerCase();
+        return (
+          !lower.includes("nano") &&
+          !lower.includes(" mini") &&
+          !lower.includes("-mini") &&
+          !lower.includes("lite") &&
+          !lower.includes("flash")
+        );
+      });
 
-      const suitableModels = [
-        ...filterModels(availableModels.anthropic),
-        ...filterModels(availableModels.openai),
-        ...filterModels(availableModels.google),
-      ];
+      // 1. Try to find GPT-4o-mini (good balance of cost/quality for evaluation)
+      const gpt4oMini = suitableModels.find(
+        (m) => m.provider === "openai" && m.id.includes("gpt-4o-mini")
+      );
 
-      // 1. Try recommended models first
-      const recommended = suitableModels.find(m => m.recommended);
-
-      // 2. Fall back to budget OpenAI models
-      const budgetOpenAI = suitableModels.find(m =>
-        m.provider === 'openai' && m.costTier === 'budget'
+      // 2. Fall back to Claude Sonnet
+      const claudeSonnet = suitableModels.find(
+        (m) => m.provider === "anthropic" && m.id.includes("sonnet")
       );
 
       // 3. Otherwise use first suitable model
-      if (recommended) {
-        setEvaluatorModel(recommended.id);
-      } else if (budgetOpenAI) {
-        setEvaluatorModel(budgetOpenAI.id);
+      if (gpt4oMini) {
+        setEvaluatorModel(gpt4oMini.id);
+      } else if (claudeSonnet) {
+        setEvaluatorModel(claudeSonnet.id);
       } else if (suitableModels.length > 0) {
         setEvaluatorModel(suitableModels[0].id);
       }
     }
-  }, [availableModels]);
+  }, [models, evaluatorModel]);
 
   // Auto-scroll: Trigger scroll when scrollTrigger increments
   useEffect(() => {
@@ -205,7 +229,9 @@ export default function ConsensusPage() {
 
     if (!prompt.trim()) return;
     if (selectedModels.length < 2 || selectedModels.length > 3) {
-      alert("Please select 2-3 models");
+      toast.error("Invalid model selection", {
+        description: "Please select 2-3 models to continue.",
+      });
       return;
     }
 
@@ -243,7 +269,10 @@ export default function ConsensusPage() {
     timeoutIdRef.current = setTimeout(() => {
       // Only abort if there's still an active request
       if (abortControllerRef.current) {
-        alert("The consensus evaluation is taking too long. Please try again.");
+        toast.error("Consensus timed out", {
+          description: "The evaluation is taking too long. Please try again with different models.",
+          duration: 8000,
+        });
         handleCancel();
       }
     }, 300000);
@@ -313,12 +342,15 @@ export default function ConsensusPage() {
         }
       }
     } catch (error: any) {
-      // Don't show error alert for user-initiated cancellation
+      // Don't show error for user-initiated cancellation
       if (error.name === 'AbortError') {
         console.log("Consensus evaluation cancelled by user");
       } else {
         console.error("Error:", error);
-        alert(error.message || "An error occurred");
+        toast.error("Consensus failed", {
+          description: error.message || "An error occurred. Please try again.",
+          duration: 6000,
+        });
       }
     } finally {
       setIsProcessing(false);
@@ -508,8 +540,41 @@ export default function ConsensusPage() {
         break;
 
       case "model-error":
-        console.warn(`Model error: ${event.data.modelLabel}`, event.data.error);
-        alert(`${event.data.modelLabel} failed to respond. Continuing with other models.`);
+        console.warn(`Model error received:`, event.data);
+        // Check if this is an OpenRouter privacy error
+        if (event.data.errorType === 'openrouter-privacy') {
+          toast.custom((id) => (
+            <CustomErrorToast
+              id={id}
+              title="Model failed"
+              description={`${event.data.modelLabel}: Enable "free endpoints that may publish prompts" in OpenRouter privacy settings to use free models.`}
+              actionLabel="Open Settings"
+              actionOnClick={() => window.open("https://openrouter.ai/settings/privacy", "_blank")}
+            />
+          ), { duration: Infinity });
+        } else if (event.data.errorType === 'rate-limit') {
+          // Check if this is a free model
+          const isFreeModel = selectedModels.find(m => m.id === event.data.modelId)?.modelId.endsWith(':free');
+
+          toast.custom((id) => (
+            <CustomErrorToast
+              id={id}
+              title="Model rate limited"
+              description={isFreeModel
+                ? `${event.data.modelLabel} hit rate limits. Free models have shared rate limits - get your own API key or hide free models to avoid this.`
+                : `${event.data.modelLabel} is temporarily rate-limited. Wait a moment and retry, or use your own API key for higher limits.`}
+              actionLabel="Get API Key"
+              actionOnClick={() => window.open("https://openrouter.ai/settings/integrations", "_blank")}
+              cancelLabel={isFreeModel ? "Hide Free Models" : undefined}
+              cancelOnClick={isFreeModel ? () => window.location.href = "/settings" : undefined}
+            />
+          ), { duration: Infinity });
+        } else {
+          toast.error(`${event.data.modelLabel} failed to respond`, {
+            description: event.data.error,
+            duration: 5000,
+          });
+        }
         break;
 
       case "complete":
@@ -521,7 +586,10 @@ export default function ConsensusPage() {
 
       case "error":
         console.error("Consensus error:", event.data);
-        alert(event.data?.message || "An error occurred during consensus generation");
+        toast.error("Consensus error", {
+          description: event.data?.message || "An error occurred during consensus generation. Please try again.",
+          duration: 8000,
+        });
         setIsProcessing(false);
         setIsSynthesizing(false);
         setIsGeneratingProgression(false);
@@ -530,10 +598,12 @@ export default function ConsensusPage() {
     }
   }
 
-  const hasAnyKeys = availableKeys && (availableKeys.anthropic || availableKeys.openai || availableKeys.google);
-  const keyCount = availableKeys ? [availableKeys.anthropic, availableKeys.openai, availableKeys.google].filter(Boolean).length : 0;
+  // With OpenRouter, user has access to all model types
+  const keyCount = hasKeys
+    ? (hasKeys.openrouter ? 3 : [hasKeys.anthropic, hasKeys.openai, hasKeys.google].filter(Boolean).length)
+    : 0;
 
-  if (availableKeys === null || modelsLoading) {
+  if (modelsLoading) {
     return (
       <div className="container py-8">
         <div className="flex min-h-[400px] items-center justify-center">
@@ -543,7 +613,7 @@ export default function ConsensusPage() {
     );
   }
 
-  if (!hasAnyKeys) {
+  if (!hasAnyKey) {
     return (
       <div className="container py-12">
         <div className="space-y-6">
@@ -592,11 +662,10 @@ export default function ConsensusPage() {
         </div>
 
         {/* Settings Panel */}
-        {availableModels && (
+        {models.length > 0 && (
           <div className="mx-auto w-full max-w-4xl">
             <SettingsPanel
-              availableKeys={availableKeys}
-              availableModels={availableModels}
+              availableKeys={hasKeys!}
               selectedModels={selectedModels}
               setSelectedModels={setSelectedModels}
               maxRounds={maxRounds}
@@ -608,6 +677,9 @@ export default function ConsensusPage() {
               enableSearch={enableSearch}
               setEnableSearch={setEnableSearch}
               disabled={isProcessing}
+              openRouterModels={models}
+              openRouterGroupedModels={groupedModels}
+              openRouterLoading={modelsLoading}
             />
           </div>
         )}

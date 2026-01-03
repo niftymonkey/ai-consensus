@@ -13,6 +13,7 @@ interface AvailableKeys {
   anthropic: boolean;
   openai: boolean;
   google: boolean;
+  openrouter: boolean;
 }
 
 interface ModelGridProps {

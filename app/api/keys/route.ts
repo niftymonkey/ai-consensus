@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getApiKeys, upsertApiKey, Provider } from "@/lib/db";
+import { getApiKeys, upsertApiKey, deleteApiKey, Provider } from "@/lib/db";
 
 /**
  * GET /api/keys - Get user's API keys (masked for security)
@@ -21,6 +21,7 @@ export async function GET() {
       openai: keys.openai ? maskApiKey(keys.openai) : null,
       google: keys.google ? maskApiKey(keys.google) : null,
       tavily: keys.tavily ? maskApiKey(keys.tavily) : null,
+      openrouter: keys.openrouter ? maskApiKey(keys.openrouter) : null,
     };
 
     return NextResponse.json({ keys: maskedKeys });
@@ -98,5 +99,45 @@ function maskApiKey(key: string): string {
  * Type guard to check if a string is a valid provider
  */
 function isValidProvider(provider: string): provider is Provider {
-  return ["anthropic", "openai", "google", "tavily"].includes(provider);
+  return ["anthropic", "openai", "google", "tavily", "openrouter"].includes(provider);
+}
+
+/**
+ * DELETE /api/keys - Delete an API key
+ */
+export async function DELETE(request: NextRequest) {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const provider = searchParams.get("provider");
+
+    if (!provider) {
+      return NextResponse.json(
+        { error: "Missing provider" },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidProvider(provider)) {
+      return NextResponse.json(
+        { error: "Invalid provider" },
+        { status: 400 }
+      );
+    }
+
+    await deleteApiKey(session.user.id, provider);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting API key:", error);
+    return NextResponse.json(
+      { error: "Failed to delete API key" },
+      { status: 500 }
+    );
+  }
 }

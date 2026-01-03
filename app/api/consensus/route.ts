@@ -15,6 +15,8 @@ import {
 } from "@/lib/consensus-db";
 import { searchTavily } from "@/lib/tavily";
 import { generateSearchQuery, shouldSearchWeb } from "@/lib/search-query-generator";
+import { createOpenRouterProvider, getOpenRouterModelId, getModelProvider, parseAIError } from "@/lib/openrouter";
+import { sendEvent, type ConsensusEvent } from "@/lib/consensus-events";
 
 export const maxDuration = 300; // 5 minutes for multiple rounds
 export const runtime = "nodejs";
@@ -76,15 +78,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Log request
-    console.log('=== Consensus API Request ===');
-    console.log('Models:', models.map(m => `${m.provider}:${m.modelId}`));
-    console.log('Evaluator:', evaluatorModel);
-    console.log('Max rounds:', maxRounds);
-    console.log('Threshold:', consensusThreshold);
-    console.log('Search enabled:', enableSearch);
+    // Log request summary
+    console.log(`[Consensus] Starting: ${models.length} models, evaluator=${evaluatorModel}, maxRounds=${maxRounds}, threshold=${consensusThreshold}%, search=${enableSearch}`);
 
     // Create provider instances based on available keys
+    // Direct provider keys take precedence over OpenRouter
     const providerInstances = {
       anthropic: keys.anthropic
         ? createAnthropic({ apiKey: keys.anthropic })
@@ -95,12 +93,54 @@ export async function POST(request: NextRequest) {
         : null,
     };
 
-    // Validate all selected models have API keys
+    // Create OpenRouter instance if key is available (used as fallback)
+    const openrouterInstance = keys.openrouter
+      ? createOpenRouterProvider(keys.openrouter)
+      : null;
+
+    // Direct providers we support with API keys
+    const directProviders = ["anthropic", "openai", "google"] as const;
+    type DirectProvider = typeof directProviders[number];
+
+    // Helper to get provider and model for a given selection
+    // Priority: Direct key > OpenRouter (for supported providers)
+    // Non-direct providers (meta-llama, mistral, etc.) always use OpenRouter
+    const getProviderForModel = (modelId: string, provider: string) => {
+      // Check if this is a direct provider we support
+      const isDirectProvider = directProviders.includes(provider as DirectProvider);
+
+      // If direct provider and we have the key, use it
+      if (isDirectProvider && providerInstances[provider as DirectProvider]) {
+        return {
+          instance: providerInstances[provider as DirectProvider],
+          modelId: modelId,
+          source: "direct" as const,
+        };
+      }
+
+      // Use OpenRouter for everything else (non-direct providers or missing direct keys)
+      if (openrouterInstance) {
+        // For OpenRouter, the modelId should already be in OpenRouter format (e.g., "meta-llama/llama-4-scout")
+        // or we can try to map it
+        const openrouterModelId = isDirectProvider ? getOpenRouterModelId(modelId) : modelId;
+        if (openrouterModelId) {
+          return {
+            instance: openrouterInstance,
+            modelId: openrouterModelId,
+            source: "openrouter" as const,
+          };
+        }
+      }
+      return null;
+    };
+
+    // Validate all selected models have API keys (direct or via OpenRouter)
     for (const model of models) {
-      if (!providerInstances[model.provider]) {
+      const providerInfo = getProviderForModel(model.modelId, model.provider);
+      if (!providerInfo) {
         return new Response(
           JSON.stringify({
-            error: `Missing API key for ${model.provider}`,
+            error: `Missing API key for ${model.provider}. Add a ${model.provider} key or use OpenRouter.`,
           }),
           {
             status: 400,
@@ -111,18 +151,27 @@ export async function POST(request: NextRequest) {
     }
 
     // Determine evaluator provider based on selected model
-    const evaluatorProvider: "anthropic" | "openai" | "google" =
-      evaluatorModel.startsWith("claude")
-        ? "anthropic"
-        : evaluatorModel.startsWith("gemini")
-          ? "google"
-          : "openai";
-    const evaluatorKey = keys[evaluatorProvider];
+    // The evaluatorModel could be a direct model ID or an OpenRouter model ID
+    const getEvaluatorProvider = (modelId: string): string => {
+      // Check for OpenRouter format (contains "/")
+      if (modelId.includes("/")) {
+        return modelId.split("/")[0]; // e.g., "anthropic/claude-3.5-sonnet" -> "anthropic"
+      }
+      // Legacy direct model ID format
+      if (modelId.startsWith("claude")) return "anthropic";
+      if (modelId.startsWith("gemini")) return "google";
+      if (modelId.startsWith("gpt") || modelId.startsWith("o1") || modelId.startsWith("o3")) return "openai";
+      return "unknown";
+    };
 
-    if (!evaluatorKey) {
+    const evaluatorProvider = getEvaluatorProvider(evaluatorModel);
+
+    // Check if evaluator can be called (direct key or OpenRouter)
+    const evaluatorProviderInfo = getProviderForModel(evaluatorModel, evaluatorProvider);
+    if (!evaluatorProviderInfo) {
       return new Response(
         JSON.stringify({
-          error: `Missing API key for evaluator provider: ${evaluatorProvider}`,
+          error: `Missing API key for evaluator provider: ${evaluatorProvider}. Add a ${evaluatorProvider} key or use OpenRouter.`,
         }),
         {
           status: 400,
@@ -130,6 +179,20 @@ export async function POST(request: NextRequest) {
         }
       );
     }
+
+    // Get the actual key for the evaluator (for functions that still need raw key)
+    // We've already validated that at least one of these exists via evaluatorProviderInfo
+    // If the model is in OpenRouter format (has "/"), always use OpenRouter key
+    // Otherwise, try direct key first, then OpenRouter
+    const isOpenRouterModel = evaluatorModel.includes("/");
+    const directKeyMap: Record<string, string | null> = {
+      anthropic: keys.anthropic,
+      openai: keys.openai,
+      google: keys.google,
+    };
+    const evaluatorKey = isOpenRouterModel
+      ? keys.openrouter!
+      : (directKeyMap[evaluatorProvider] || keys.openrouter)!;
 
     // Create database record
     const conversationId = await createConsensusConversation(
@@ -155,64 +218,47 @@ export async function POST(request: NextRequest) {
           searchData?: SearchData;
         }> = [];
 
-        // Helper: safely enqueue data, checking if request was aborted
-        const safeEnqueue = (data: Uint8Array): boolean => {
+        // Helper: safely send typed event, checking if request was aborted
+        const safeEnqueue = (event: ConsensusEvent): boolean => {
           if (request.signal.aborted) {
             return false;
           }
-          try {
-            controller.enqueue(data);
-            return true;
-          } catch (error) {
-            // Controller may be closed if client disconnected
-            console.log("Stream controller closed:", error instanceof Error ? error.message : 'Unknown error');
-            return false;
-          }
+          return sendEvent(encoder, controller, event);
         };
 
         try {
           // Check if already aborted before starting
           if (request.signal.aborted) {
-            console.log("Request aborted before processing started");
             return;
           }
 
           // Send start event
-          if (!safeEnqueue(
-            encoder.encode(
-              JSON.stringify({
-                type: "start",
-                conversationId,
-              }) + "\n"
-            )
-          )) return;
+          if (!safeEnqueue({
+            type: "start",
+            conversationId,
+          })) return;
 
           // Multi-round loop with early termination
           while (currentRound < maxRounds && !isGoodEnough) {
             // Check if aborted
             if (request.signal.aborted) {
-              console.log("Request aborted during round loop");
               return;
             }
 
             currentRound++;
 
             // Stream round status
-            if (!safeEnqueue(
-              encoder.encode(
-                JSON.stringify({
-                  type: "round-status",
-                  data: {
-                    roundNumber: currentRound,
-                    maxRounds,
-                    status:
-                      currentRound === 1
-                        ? "Initial responses"
-                        : "Refining responses",
-                  },
-                }) + "\n"
-              )
-            )) return;
+            if (!safeEnqueue({
+              type: "round-status",
+              data: {
+                roundNumber: currentRound,
+                maxRounds,
+                status:
+                  currentRound === 1
+                    ? "Initial responses"
+                    : "Refining responses",
+              },
+            })) return;
 
             // Search logic: Round 1 or when model requested more info
             let searchData: SearchData | null = null;
@@ -222,7 +268,6 @@ export async function POST(request: NextRequest) {
               // Round 1: Check if question needs current info
               if (currentRound === 1) {
                 shouldSearch = await shouldSearchWeb(prompt, evaluatorKey, evaluatorProvider, evaluatorModel);
-                console.log(`[Round ${currentRound}] Search needed: ${shouldSearch}`);
               }
               // Subsequent rounds: Only if model requested
               else if (previousEvaluation?.needsMoreInfo && previousEvaluation?.suggestedSearchQuery) {
@@ -236,18 +281,14 @@ export async function POST(request: NextRequest) {
                     ? await generateSearchQuery(prompt, evaluatorKey, evaluatorProvider, evaluatorModel)
                     : previousEvaluation!.suggestedSearchQuery!;
 
-                  console.log(`[Round ${currentRound}] Searching: "${searchQuery}"`);
-
                   // Stream search-start event
-                  if (!safeEnqueue(
-                    encoder.encode(
-                      JSON.stringify({
-                        type: "search-start",
-                        round: currentRound,
-                        query: searchQuery,
-                      }) + "\n"
-                    )
-                  )) return;
+                  if (!safeEnqueue({
+                    type: "search-start",
+                    data: {
+                      query: searchQuery,
+                      round: currentRound,
+                    },
+                  })) return;
 
                   // Execute search
                   const results = await searchTavily(searchQuery, tavilyKey);
@@ -259,31 +300,25 @@ export async function POST(request: NextRequest) {
                     triggeredBy: currentRound === 1 ? 'user' : 'model',
                   };
 
-                  console.log(`[Round ${currentRound}] Search complete: ${results.length} results`);
-
                   // Stream search-complete event
-                  if (!safeEnqueue(
-                    encoder.encode(
-                      JSON.stringify({
-                        type: "search-complete",
-                        round: currentRound,
-                        data: searchData,
-                      }) + "\n"
-                    )
-                  )) return;
+                  if (!safeEnqueue({
+                    type: "search-complete",
+                    data: {
+                      results,
+                      round: currentRound,
+                    },
+                  })) return;
                 } catch (error) {
                   console.error(`[Round ${currentRound}] Search error:`, error);
 
                   // Stream search-error event (non-fatal)
-                  safeEnqueue(
-                    encoder.encode(
-                      JSON.stringify({
-                        type: "search-error",
-                        round: currentRound,
-                        error: error instanceof Error ? error.message : 'Search failed',
-                      }) + "\n"
-                    )
-                  );
+                  safeEnqueue({
+                    type: "search-error",
+                    data: {
+                      error: error instanceof Error ? error.message : 'Search failed',
+                      round: currentRound,
+                    },
+                  });
                   // Continue without search results
                 }
               }
@@ -296,6 +331,7 @@ export async function POST(request: NextRequest) {
               previousResponses: currentRound > 1 ? previousResponses : null,
               selectedModels: models,
               providerInstances,
+              openrouterInstance,
               controller,
               encoder,
               round: currentRound,
@@ -305,24 +341,39 @@ export async function POST(request: NextRequest) {
 
             // Check if aborted after generating responses
             if (request.signal.aborted) {
-              console.log("Request aborted after generating responses");
+              return;
+            }
+
+            // Check if any model failed - abort immediately
+            const failedModels = models.filter(
+              (m) => roundResponses.get(m.id)?.startsWith("[Error:")
+            );
+
+            if (failedModels.length > 0) {
+              // Any model failure aborts the consensus process
+              const failedNames = failedModels.map((m) => m.label).join(", ");
+              safeEnqueue({
+                type: "error",
+                data: {
+                  message: failedModels.length === models.length
+                    ? "All models failed to respond. Please try different models or check your API keys."
+                    : `Consensus cancelled: ${failedNames} failed. Please try different models or check your API keys.`,
+                  round: currentRound,
+                },
+              });
               return;
             }
 
             // Send evaluation start event
-            if (!safeEnqueue(
-              encoder.encode(
-                JSON.stringify({
-                  type: "evaluation-start",
-                  round: currentRound,
-                }) + "\n"
-              )
-            )) return;
+            if (!safeEnqueue({
+              type: "evaluation-start",
+              round: currentRound,
+            })) return;
 
             // Evaluate consensus with error handling
             let evaluation;
             try {
-              console.log(`[Round ${currentRound}] Starting consensus evaluation with ${evaluatorProvider}:${evaluatorModel}`);
+              console.log(`[Round ${currentRound}] Evaluating consensus with ${evaluatorProvider}:${evaluatorModel}`);
 
               evaluation = await evaluateConsensusWithStream(
                 roundResponses,
@@ -334,58 +385,51 @@ export async function POST(request: NextRequest) {
                 currentRound,
                 (partial) => {
                   // Stream partial evaluation updates to frontend
-                  safeEnqueue(
-                    encoder.encode(
-                      JSON.stringify({
-                        type: "evaluation",
-                        data: partial,
-                        round: currentRound,
-                      }) + "\n"
-                    )
-                  );
+                  safeEnqueue({
+                    type: "evaluation",
+                    data: partial,
+                    round: currentRound,
+                  });
                 },
                 enableSearch
               );
 
-              console.log(`[Round ${currentRound}] Consensus evaluation received - Score: ${evaluation.score}%, isGoodEnough: ${evaluation.isGoodEnough}`);
+              console.log(`[Round ${currentRound}] Evaluation complete - Score: ${evaluation.score}%`);
 
               // Send evaluation complete event
-              if (!safeEnqueue(
-                encoder.encode(
-                  JSON.stringify({
-                    type: "evaluation-complete",
-                    round: currentRound,
-                  }) + "\n"
-                )
-              )) return;
+              if (!safeEnqueue({
+                type: "evaluation-complete",
+                round: currentRound,
+              })) return;
             } catch (error) {
               console.error(`[Round ${currentRound}] Evaluation failed:`, error);
 
-              safeEnqueue(
-                encoder.encode(
-                  JSON.stringify({
-                    type: "error",
-                    data: {
-                      message: "Failed to evaluate consensus. Please try again.",
-                      round: currentRound,
-                      details: error instanceof Error ? error.message : 'Unknown error'
-                    },
-                  }) + "\n"
-                )
-              );
+              // Parse the error to give user-friendly message
+              const parsedError = parseAIError(error);
+              let errorMessage = "Failed to evaluate consensus. Please try again.";
 
-              throw error; // Re-throw to hit outer catch
+              if (parsedError.type === 'rate-limit') {
+                errorMessage = `Evaluator model is rate-limited. Please try a different evaluator model or wait a moment.`;
+              } else if (parsedError.type === 'openrouter-privacy') {
+                errorMessage = `Evaluator model requires OpenRouter privacy settings update.`;
+              }
+
+              safeEnqueue({
+                type: "error",
+                data: {
+                  message: errorMessage,
+                  round: currentRound,
+                },
+              });
+
+              return; // Stop processing - don't throw, just end gracefully
             }
 
             finalScore = evaluation.score;
-            // Fallback: Enforce isGoodEnough logic in case LLM makes a mistake
-            isGoodEnough = evaluation.isGoodEnough || evaluation.score >= consensusThreshold;
+            // Enforce threshold - only the score matters, not LLM's opinion
+            isGoodEnough = evaluation.score >= consensusThreshold;
 
-            // Debug logging
-            console.log(`[Round ${currentRound}] Score: ${evaluation.score}, Threshold: ${consensusThreshold}, LLM isGoodEnough: ${evaluation.isGoodEnough}, Final isGoodEnough: ${isGoodEnough}`);
-            if (evaluation.needsMoreInfo) {
-              console.log(`[Round ${currentRound}] Model requested more info: "${evaluation.suggestedSearchQuery}"`);
-            }
+            console.log(`[Round ${currentRound}] Consensus ${isGoodEnough ? 'reached' : 'not reached'} (${evaluation.score}% vs ${consensusThreshold}% threshold)`);
 
             previousResponses = roundResponses;
             previousEvaluation = evaluation;
@@ -427,34 +471,23 @@ export async function POST(request: NextRequest) {
                 currentRound + 1
               );
 
-              if (!safeEnqueue(
-                encoder.encode(
-                  JSON.stringify({
-                    type: "refinement-prompts",
-                    data: refinementPrompts,
-                    round: currentRound,
-                  }) + "\n"
-                )
-              )) return;
+              if (!safeEnqueue({
+                type: "refinement-prompts",
+                data: refinementPrompts,
+                round: currentRound,
+              })) return;
             }
           }
 
           // Check if aborted before synthesis
-          if (request.signal.aborted) {
-            console.log("Request aborted before synthesis");
-            return;
-          }
+          if (request.signal.aborted) return;
 
           // Generate final synthesis
-          if (!safeEnqueue(
-            encoder.encode(
-              JSON.stringify({
-                type: "synthesis-start",
-              }) + "\n"
-            )
-          )) return;
+          if (!safeEnqueue({
+            type: "synthesis-start",
+          })) return;
 
-          console.log(`[Synthesis] Starting final synthesis with ${evaluatorProvider}:${evaluatorModel}`);
+          console.log(`[Synthesis] Generating final consensus with ${evaluatorProvider}:${evaluatorModel}`);
 
           let finalSynthesis = "";
           await streamFinalSynthesis({
@@ -462,68 +495,48 @@ export async function POST(request: NextRequest) {
             finalResponses: previousResponses,
             selectedModels: models,
             providerInstances,
+            openrouterInstance,
             evaluatorProvider,
             evaluatorModel,
             onChunk: (chunk) => {
               finalSynthesis += chunk;
-              safeEnqueue(
-                encoder.encode(
-                  JSON.stringify({
-                    type: "synthesis-chunk",
-                    content: chunk,
-                  }) + "\n"
-                )
-              );
+              safeEnqueue({
+                type: "synthesis-chunk",
+                content: chunk,
+              });
             },
           });
 
-          console.log(`[Synthesis] Final synthesis received (${finalSynthesis.length} chars)`);
+          console.log(`[Synthesis] Complete`);
 
           // Check if aborted before progression summary
-          if (request.signal.aborted) {
-            console.log("Request aborted before progression summary");
-            return;
-          }
+          if (request.signal.aborted) return;
 
           // Generate progression summary (only if multiple rounds)
           if (allRoundsData.length > 1) {
-            if (!safeEnqueue(
-              encoder.encode(
-                JSON.stringify({
-                  type: "progression-summary-start",
-                }) + "\n"
-              )
-            )) return;
-
-            console.log(`[Progression Summary] Starting progression summary generation`);
+            if (!safeEnqueue({
+              type: "progression-summary-start",
+            })) return;
 
             await streamProgressionSummary({
               originalPrompt: prompt,
               roundsData: allRoundsData,
               selectedModels: models,
               providerInstances,
+              openrouterInstance,
               evaluatorProvider,
               evaluatorModel,
               onChunk: (chunk) => {
-                safeEnqueue(
-                  encoder.encode(
-                    JSON.stringify({
-                      type: "progression-summary-chunk",
-                      content: chunk,
-                    }) + "\n"
-                  )
-                );
+                safeEnqueue({
+                  type: "progression-summary-chunk",
+                  content: chunk,
+                });
               },
             });
-
-            console.log(`[Progression Summary] Complete`);
           }
 
           // Check if aborted before final updates
-          if (request.signal.aborted) {
-            console.log("Request aborted before final updates");
-            return;
-          }
+          if (request.signal.aborted) return;
 
           // Update database with final result
           await updateConversationResult(
@@ -534,33 +547,23 @@ export async function POST(request: NextRequest) {
           );
 
           // Send final responses
-          if (!safeEnqueue(
-            encoder.encode(
-              JSON.stringify({
-                type: "final-responses",
-                data: Object.fromEntries(previousResponses),
-              }) + "\n"
-            )
-          )) return;
+          if (!safeEnqueue({
+            type: "final-responses",
+            data: Object.fromEntries(previousResponses),
+          })) return;
 
           // Send complete event
-          safeEnqueue(
-            encoder.encode(
-              JSON.stringify({
-                type: "complete",
-              }) + "\n"
-            )
-          );
+          safeEnqueue({
+            type: "complete",
+          });
         } catch (error: any) {
           console.error("Error in consensus workflow:", error);
-          safeEnqueue(
-            encoder.encode(
-              JSON.stringify({
-                type: "error",
-                error: error.message || "An error occurred",
-              }) + "\n"
-            )
-          );
+          safeEnqueue({
+            type: "error",
+            data: {
+              message: error.message || "An error occurred",
+            },
+          });
         } finally {
           controller.close();
         }
@@ -589,6 +592,7 @@ async function generateRoundResponses(opts: {
   previousResponses: Map<string, string> | null;
   selectedModels: ModelSelection[];
   providerInstances: Record<string, any>;
+  openrouterInstance: any;
   controller: ReadableStreamDefaultController;
   encoder: TextEncoder;
   round: number;
@@ -597,32 +601,53 @@ async function generateRoundResponses(opts: {
 }): Promise<Map<string, string>> {
   const responses = new Map<string, string>();
 
-  // Helper: safely enqueue, checking abort signal
-  const safeEnqueue = (data: Uint8Array): boolean => {
-    if (opts.signal.aborted) {
+  // Create internal abort controller that triggers when any model fails
+  const internalAbortController = new AbortController();
+
+  // Helper: safely send typed event, checking abort signals
+  const safeEnqueue = (event: ConsensusEvent): boolean => {
+    if (opts.signal.aborted || internalAbortController.signal.aborted) {
       return false;
     }
-    try {
-      opts.controller.enqueue(data);
-      return true;
-    } catch (error) {
-      console.log("Stream controller closed in generateRoundResponses:", error instanceof Error ? error.message : 'Unknown error');
-      return false;
-    }
+    return sendEvent(opts.encoder, opts.controller, event);
   };
 
   // Helper: stream and buffer single model response with timeout
   async function streamAndBuffer(modelSelection: ModelSelection) {
-    const provider = opts.providerInstances[modelSelection.provider];
+    // Direct providers we support with API keys
+    const directProviders = ["anthropic", "openai", "google"];
+    const isDirectProvider = directProviders.includes(modelSelection.provider);
+    // Check if model ID is in OpenRouter format (contains "/")
+    const isOpenRouterModel = modelSelection.modelId.includes("/");
+
+    // Determine which provider to use
+    // Use OpenRouter if: model ID is OpenRouter format OR provider isn't direct
+    // Use direct only if: provider is direct AND model ID isn't OpenRouter format AND we have the key
+    let provider = null;
+    let modelIdToUse = modelSelection.modelId;
+    let source = "direct";
+
+    if (!isOpenRouterModel && isDirectProvider && opts.providerInstances[modelSelection.provider]) {
+      // Direct provider with non-OpenRouter model ID
+      provider = opts.providerInstances[modelSelection.provider];
+      source = "direct";
+    } else if (opts.openrouterInstance) {
+      // Use OpenRouter
+      provider = opts.openrouterInstance;
+      modelIdToUse = modelSelection.modelId; // Already in OpenRouter format or will be mapped
+      source = "openrouter";
+    }
+
     if (!provider) {
       console.error(`Provider not found for ${modelSelection.id}`);
       responses.set(modelSelection.id, `[Error: Provider not configured for ${modelSelection.label}]`);
       return;
     }
 
-    console.log(`[Model Call] Round ${opts.round}: Calling ${modelSelection.provider}:${modelSelection.modelId} (${modelSelection.label})`);
+    console.log(`[Model Call] Round ${opts.round}: Calling ${modelSelection.provider}:${modelIdToUse} via ${source} (${modelSelection.label})`);
 
     try {
+
       // Build prompt (initial or refinement)
       let promptText = opts.prompt
         ? opts.prompt // Round 1
@@ -642,82 +667,112 @@ async function generateRoundResponses(opts: {
         promptText = buildPromptWithSearchContext(promptText, opts.searchData.results);
       }
 
+      // Direct providers are callable functions, OpenRouter uses .chat()
+      const model = source === "openrouter"
+        ? provider.chat(modelIdToUse)
+        : provider(modelIdToUse);
+
+      let apiError: Error | null = null; // Capture the real API error from onError callback
       const result = streamText({
-        model: provider(modelSelection.modelId),
+        model,
         prompt: promptText,
+        abortSignal: internalAbortController.signal, // Use internal abort signal
+        onError: ({ error }) => {
+          console.error(`[Model ${modelSelection.modelId}] onError callback:`, error);
+          apiError = error instanceof Error ? error : new Error(String(error));
+        },
       });
 
       // Stream to frontend and buffer with timeout
       let fullResponse = "";
       const timeoutMs = 180000; // 3 minutes - increased to accommodate slower models
       const startTime = Date.now();
+      let streamError: Error | null = null;
 
-      for await (const chunk of result.textStream) {
-        // Check if aborted
-        if (opts.signal.aborted) {
-          console.log(`Model ${modelSelection.id} streaming aborted`);
-          return;
+      try {
+        for await (const chunk of result.textStream) {
+          // Check if aborted (either by user or by internal failure)
+          if (opts.signal.aborted || internalAbortController.signal.aborted) {
+            return;
+          }
+
+          // Check timeout
+          if (Date.now() - startTime > timeoutMs) {
+            throw new Error(`Model ${modelSelection.label} timeout after 3 minutes`);
+          }
+
+          fullResponse += chunk;
+
+          if (!safeEnqueue({
+            type: "model-response",
+            data: {
+              modelId: modelSelection.id,
+              modelLabel: modelSelection.label,
+              content: fullResponse,
+              round: opts.round,
+            },
+          })) {
+            // Stream closed, stop processing
+            return;
+          }
         }
+      } catch (iterError) {
+        console.error(`[Model ${modelSelection.modelId}] Stream iteration error:`, iterError);
+        streamError = iterError instanceof Error ? iterError : new Error(String(iterError));
+      }
 
-        // Check timeout
-        if (Date.now() - startTime > timeoutMs) {
-          throw new Error(`Model ${modelSelection.label} timeout after 3 minutes`);
+      // Also await the text promise to catch any errors that didn't surface in the stream
+      try {
+        await result.text;
+      } catch (textError) {
+        console.error(`[Model ${modelSelection.modelId}] result.text error:`, textError);
+        if (!streamError) {
+          streamError = textError instanceof Error ? textError : new Error(String(textError));
         }
+      }
 
-        fullResponse += chunk;
-
-        if (!safeEnqueue(
-          opts.encoder.encode(
-            JSON.stringify({
-              type: "model-response",
-              data: {
-                modelId: modelSelection.id,
-                modelLabel: modelSelection.label,
-                content: fullResponse,
-                round: opts.round,
-              },
-            }) + "\n"
-          )
-        )) {
-          // Stream closed, stop processing
-          return;
-        }
+      // Prefer the API error (from onError callback) as it has the real error message
+      // Fall back to stream error if no API error was captured
+      if (apiError || streamError) {
+        throw apiError || streamError;
       }
 
       // Buffer complete response for evaluation
       responses.set(modelSelection.id, fullResponse);
     } catch (error) {
-      console.error(`Model ${modelSelection.id} failed:`, error);
+      console.error(`[Model ${modelSelection.modelId}] Failed:`, error);
 
-      // Send error event to client (only if not aborted)
-      if (!opts.signal.aborted) {
-        safeEnqueue(
-          opts.encoder.encode(
-            JSON.stringify({
-              type: "model-error",
-              data: {
-                modelId: modelSelection.id,
-                modelLabel: modelSelection.label,
-                error: error instanceof Error ? error.message : 'Unknown error',
-                round: opts.round,
-              },
-            }) + "\n"
-          )
-        );
+      // Parse error using helper that traverses nested AI SDK error structure
+      const parsedError = parseAIError(error);
+
+      // Don't send errors or trigger aborts for models that were aborted by another failure
+      const wasAbortedByFailure = internalAbortController.signal.aborted;
+
+      // For the actual failed model (not ones we aborted), send error event and trigger abort
+      if (!opts.signal.aborted && !wasAbortedByFailure) {
+        // Send error event to client BEFORE we trigger abort
+        safeEnqueue({
+          type: "model-error",
+          data: {
+            modelId: modelSelection.id,
+            modelLabel: modelSelection.label,
+            error: parsedError.message,
+            errorType: parsedError.type,
+            round: opts.round,
+          },
+        });
+
+        // Now abort all other models
+        internalAbortController.abort();
       }
 
-      // Set placeholder response so consensus can continue with remaining models
+      // Set placeholder response so we know which model failed
       responses.set(modelSelection.id, `[Error: ${modelSelection.label} did not respond]`);
     }
   }
 
   // Run all selected models in parallel (2 or 3) with graceful failure handling
   await Promise.allSettled(opts.selectedModels.map((model) => streamAndBuffer(model)));
-
-  console.log(`[Round ${opts.round}] All model responses received`);
-  console.log(`[Round ${opts.round}] Response lengths:`, Object.fromEntries(
-    Array.from(responses.entries()).map(([id, text]) => [id, `${text.length} chars`])
-  ));
 
   return responses;
 }
@@ -756,13 +811,34 @@ async function streamFinalSynthesis(opts: {
   finalResponses: Map<string, string>;
   selectedModels: ModelSelection[];
   providerInstances: Record<string, any>;
-  evaluatorProvider: "anthropic" | "openai" | "google";
+  openrouterInstance: any;
+  evaluatorProvider: string;
   evaluatorModel: string;
   onChunk: (chunk: string) => void;
 }): Promise<void> {
   // Use evaluator provider for synthesis
-  const thinkingProvider = opts.providerInstances[opts.evaluatorProvider];
-  const thinkingModel = opts.evaluatorModel;
+  // If model ID contains "/", it's an OpenRouter model - use OpenRouter regardless of direct provider
+  const isOpenRouterModel = opts.evaluatorModel.includes("/");
+  let thinkingProvider;
+  let thinkingModel = opts.evaluatorModel;
+  let useOpenRouter = false;
+
+  if (isOpenRouterModel && opts.openrouterInstance) {
+    // OpenRouter model - route through OpenRouter
+    thinkingProvider = opts.openrouterInstance;
+    useOpenRouter = true;
+  } else if (opts.providerInstances[opts.evaluatorProvider]) {
+    // Direct provider model
+    thinkingProvider = opts.providerInstances[opts.evaluatorProvider];
+  } else if (opts.openrouterInstance) {
+    // Fallback to OpenRouter
+    thinkingProvider = opts.openrouterInstance;
+    const openrouterModelId = getOpenRouterModelId(opts.evaluatorModel);
+    if (openrouterModelId) {
+      thinkingModel = openrouterModelId;
+      useOpenRouter = true;
+    }
+  }
 
   // Build synthesis prompt
   const responsesText = opts.selectedModels
@@ -787,8 +863,13 @@ Create a single, unified response that:
 
 Generate the consensus response:`;
 
+  // Direct providers are callable functions, OpenRouter uses .chat()
+  const model = useOpenRouter
+    ? thinkingProvider.chat(thinkingModel)
+    : thinkingProvider(thinkingModel);
+
   const synthesisResult = streamText({
-    model: thinkingProvider(thinkingModel),
+    model,
     prompt: synthesisPrompt,
   });
 
@@ -810,13 +891,34 @@ async function streamProgressionSummary(opts: {
   }>;
   selectedModels: ModelSelection[];
   providerInstances: Record<string, any>;
-  evaluatorProvider: "anthropic" | "openai" | "google";
+  openrouterInstance: any;
+  evaluatorProvider: string;
   evaluatorModel: string;
   onChunk: (chunk: string) => void;
 }): Promise<void> {
   // Use evaluator provider for progression summary
-  const thinkingProvider = opts.providerInstances[opts.evaluatorProvider];
-  const thinkingModel = opts.evaluatorModel;
+  // If model ID contains "/", it's an OpenRouter model - use OpenRouter regardless of direct provider
+  const isOpenRouterModel = opts.evaluatorModel.includes("/");
+  let thinkingProvider;
+  let thinkingModel = opts.evaluatorModel;
+  let useOpenRouter = false;
+
+  if (isOpenRouterModel && opts.openrouterInstance) {
+    // OpenRouter model - route through OpenRouter
+    thinkingProvider = opts.openrouterInstance;
+    useOpenRouter = true;
+  } else if (opts.providerInstances[opts.evaluatorProvider]) {
+    // Direct provider model
+    thinkingProvider = opts.providerInstances[opts.evaluatorProvider];
+  } else if (opts.openrouterInstance) {
+    // Fallback to OpenRouter
+    thinkingProvider = opts.openrouterInstance;
+    const openrouterModelId = getOpenRouterModelId(opts.evaluatorModel);
+    if (openrouterModelId) {
+      thinkingModel = openrouterModelId;
+      useOpenRouter = true;
+    }
+  }
 
   // Maximum length for response excerpts in progression summary
   const RESPONSE_EXCERPT_LENGTH = 300;
@@ -880,8 +982,13 @@ Create a compelling narrative summary that describes how the consensus evolved a
 Generate the progression summary:`;
 
   try {
+    // Direct providers are callable functions, OpenRouter uses .chat()
+    const model = useOpenRouter
+      ? thinkingProvider.chat(thinkingModel)
+      : thinkingProvider(thinkingModel);
+
     const progressionResult = streamText({
-      model: thinkingProvider(thinkingModel),
+      model,
       prompt: progressionPrompt,
     });
 

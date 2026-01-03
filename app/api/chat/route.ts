@@ -5,6 +5,11 @@ import { streamText } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import {
+  createOpenRouterProvider,
+  getOpenRouterModelId,
+  getModelProvider,
+} from "@/lib/openrouter";
 
 export const runtime = "nodejs";
 
@@ -35,7 +40,7 @@ export async function POST(request: NextRequest) {
     // Get user's API keys
     const keys = await getApiKeys(session.user.id);
 
-    if (!keys.anthropic && !keys.openai && !keys.google) {
+    if (!keys.anthropic && !keys.openai && !keys.google && !keys.openrouter) {
       return new Response(
         JSON.stringify({
           error: "No API keys configured. Please add at least one API key in Settings."
@@ -46,6 +51,11 @@ export async function POST(request: NextRequest) {
         }
       );
     }
+
+    // Create OpenRouter provider if key exists
+    const openrouterProvider = keys.openrouter
+      ? createOpenRouterProvider(keys.openrouter)
+      : null;
 
     // Create a ReadableStream that merges all three model streams
     const encoder = new TextEncoder();
@@ -119,46 +129,100 @@ export async function POST(request: NextRequest) {
         }
 
         // Start all three models in parallel
-        if (keys.anthropic) {
-          const anthropicProvider = createAnthropic({
-            apiKey: keys.anthropic,
-          });
-          promises.push(
-            streamModel("claude", keys.anthropic, () =>
-              streamText({
-                model: anthropicProvider(selectedModels.claude),
-                prompt,
-              })
-            )
-          );
+        // Claude: Direct key takes precedence over OpenRouter
+        if (keys.anthropic || openrouterProvider) {
+          const useOpenRouter = !keys.anthropic && !!openrouterProvider;
+          const effectiveKey = keys.anthropic || keys.openrouter;
+
+          if (useOpenRouter) {
+            const orModelId = getOpenRouterModelId(selectedModels.claude);
+            if (orModelId) {
+              promises.push(
+                streamModel("claude", effectiveKey, () =>
+                  streamText({
+                    model: openrouterProvider!.chat(orModelId),
+                    prompt,
+                  })
+                )
+              );
+            }
+          } else {
+            const anthropicProvider = createAnthropic({
+              apiKey: keys.anthropic!,
+            });
+            promises.push(
+              streamModel("claude", keys.anthropic, () =>
+                streamText({
+                  model: anthropicProvider(selectedModels.claude),
+                  prompt,
+                })
+              )
+            );
+          }
         }
 
-        if (keys.openai) {
-          const openaiProvider = createOpenAI({
-            apiKey: keys.openai,
-          });
-          promises.push(
-            streamModel("gpt", keys.openai, () =>
-              streamText({
-                model: openaiProvider(selectedModels.gpt),
-                prompt,
-              })
-            )
-          );
+        // GPT: Direct key takes precedence over OpenRouter
+        if (keys.openai || openrouterProvider) {
+          const useOpenRouter = !keys.openai && !!openrouterProvider;
+          const effectiveKey = keys.openai || keys.openrouter;
+
+          if (useOpenRouter) {
+            const orModelId = getOpenRouterModelId(selectedModels.gpt);
+            if (orModelId) {
+              promises.push(
+                streamModel("gpt", effectiveKey, () =>
+                  streamText({
+                    model: openrouterProvider!.chat(orModelId),
+                    prompt,
+                  })
+                )
+              );
+            }
+          } else {
+            const openaiProvider = createOpenAI({
+              apiKey: keys.openai!,
+            });
+            promises.push(
+              streamModel("gpt", keys.openai, () =>
+                streamText({
+                  model: openaiProvider(selectedModels.gpt),
+                  prompt,
+                })
+              )
+            );
+          }
         }
 
-        if (keys.google) {
-          const googleProvider = createGoogleGenerativeAI({
-            apiKey: keys.google,
-          });
-          promises.push(
-            streamModel("gemini", keys.google, () =>
-              streamText({
-                model: googleProvider(selectedModels.gemini),
-                prompt,
-              })
-            )
-          );
+        // Gemini: Direct key takes precedence over OpenRouter
+        if (keys.google || openrouterProvider) {
+          const useOpenRouter = !keys.google && !!openrouterProvider;
+          const effectiveKey = keys.google || keys.openrouter;
+
+          if (useOpenRouter) {
+            const orModelId = getOpenRouterModelId(selectedModels.gemini);
+            if (orModelId) {
+              promises.push(
+                streamModel("gemini", effectiveKey, () =>
+                  streamText({
+                    model: openrouterProvider!.chat(orModelId),
+                    prompt,
+                  })
+                )
+              );
+            }
+          } else {
+            const googleProvider = createGoogleGenerativeAI({
+              apiKey: keys.google!,
+            });
+            promises.push(
+              streamModel("gemini", keys.google, () =>
+                streamText({
+                  model: googleProvider(selectedModels.gemini),
+                  prompt,
+                })
+              )
+            );
+          }
         }
 
         // Wait for all streams to complete

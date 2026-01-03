@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { auth } from "@/lib/auth";
+import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
   title: "AI Consensus - Multi-Model Collaboration",
@@ -39,6 +40,7 @@ export default async function RootLayout({
         <Providers session={session}>
           {children}
         </Providers>
+        <Toaster richColors />
       </body>
     </html>
   );

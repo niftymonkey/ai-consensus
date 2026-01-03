@@ -1,38 +1,47 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { SettingsHeader } from "@/components/settings/settings-header";
 import { APIKeyInput } from "@/components/settings/api-key-input";
 import { SecurityNotice } from "@/components/settings/security-notice";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 export default function SettingsPage() {
   const router = useRouter();
   const [keys, setKeys] = useState({
+    openrouter: "",
     anthropic: "",
     openai: "",
     google: "",
     tavily: "",
   });
   const [maskedKeys, setMaskedKeys] = useState({
+    openrouter: null as string | null,
     anthropic: null as string | null,
     openai: null as string | null,
     google: null as string | null,
     tavily: null as string | null,
   });
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
+  const [hideFreeModels, setHideFreeModels] = useState(false);
+
+  // Determine which tab to show by default based on configured keys
+  const hasOpenRouter = maskedKeys.openrouter !== null;
+  const hasDirectKeys = maskedKeys.anthropic !== null || maskedKeys.openai !== null || maskedKeys.google !== null;
+  const defaultTab = hasDirectKeys && !hasOpenRouter ? "direct" : "openrouter";
 
   useEffect(() => {
     fetchKeys();
+    // Load model preferences
+    const savedHideFree = localStorage.getItem("hideFreeModels");
+    if (savedHideFree !== null) {
+      setHideFreeModels(savedHideFree === "true");
+    }
   }, []);
 
   async function fetchKeys() {
@@ -49,36 +58,19 @@ export default function SettingsPage() {
     }
   }
 
-  async function saveKeys() {
-    setSaving(true);
-    setMessage(null);
-
+  const saveKey = useCallback(async (provider: string, apiKey: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const keysToSave = Object.entries(keys).filter(([_, value]) => value.trim());
+      const response = await fetch("/api/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, apiKey }),
+      });
 
-      if (keysToSave.length === 0) {
-        setMessage({ type: "error", text: "Please enter at least one API key" });
-        setSaving(false);
-        return;
+      if (!response.ok) {
+        return { success: false, error: `Failed to save ${provider} key` };
       }
 
-      // Check if this is the first time adding keys (all maskedKeys are null)
-      const isFirstTime = Object.values(maskedKeys).every(key => key === null);
-
-      for (const [provider, apiKey] of keysToSave) {
-        const response = await fetch("/api/keys", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ provider, apiKey }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to save ${provider} key`);
-        }
-      }
-
-      setMessage({ type: "success", text: "API keys saved successfully!" });
-      setKeys({ anthropic: "", openai: "", google: "", tavily: "" });
+      // Refresh keys to get updated masked value
       await fetchKeys();
 
       // Set a flag in localStorage to trigger refetch on other pages
@@ -87,103 +79,173 @@ export default function SettingsPage() {
       // Trigger a router refresh to invalidate cached data
       router.refresh();
 
-      // First-time only: auto-redirect to consensus page after brief delay
-      if (isFirstTime) {
-        setTimeout(() => {
-          router.push("/consensus");
-        }, 1500);
-      }
+      return { success: true };
     } catch (error) {
-      console.error("Error saving keys:", error);
-      setMessage({ type: "error", text: "Failed to save API keys. Please try again." });
-    } finally {
-      setSaving(false);
+      console.error("Error saving key:", error);
+      return { success: false, error: "Failed to save key" };
     }
-  }
+  }, [router]);
+
+  const deleteKey = useCallback(async (provider: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const response = await fetch(`/api/keys?provider=${provider}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        return { success: false, error: `Failed to delete ${provider} key` };
+      }
+
+      // Refresh keys to get updated state
+      await fetchKeys();
+
+      // Set a flag in localStorage to trigger refetch on other pages
+      localStorage.setItem("apiKeysUpdated", Date.now().toString());
+
+      // Trigger a router refresh to invalidate cached data
+      router.refresh();
+
+      return { success: true };
+    } catch (error) {
+      console.error("Error deleting key:", error);
+      return { success: false, error: "Failed to delete key" };
+    }
+  }, [router]);
+
+  const handleHideFreeModelsChange = (checked: boolean) => {
+    setHideFreeModels(checked);
+    localStorage.setItem("hideFreeModels", checked.toString());
+    // Trigger model list refresh on other pages
+    localStorage.setItem("apiKeysUpdated", Date.now().toString());
+  };
 
   return (
     <div className="container py-12">
-      <div className="space-y-6">
+      <div className="mx-auto max-w-4xl space-y-6">
         <SettingsHeader />
 
+        {/* Model Provider Keys */}
         <Card>
           <CardHeader>
-            <CardTitle>API Keys</CardTitle>
+            <CardTitle>Model Provider</CardTitle>
             <CardDescription>
-              To use AI Consensus, you need to provide API keys for each model.
-              Your keys are encrypted and stored securely using AES-256.
+              Choose how to connect to AI models. Keys are encrypted with AES-256.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent>
             {loading ? (
               <div className="space-y-4">
-                <Skeleton className="h-20 w-full" />
-                <Skeleton className="h-20 w-full" />
-                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-20 w-full" />
               </div>
             ) : (
-              <>
-                <APIKeyInput
-                  provider="anthropic"
-                  displayName="Anthropic (Claude)"
-                  value={keys.anthropic}
-                  maskedKey={maskedKeys.anthropic}
-                  placeholder="sk-ant-..."
-                  docsUrl="https://console.anthropic.com/"
-                  colorClass="bg-primary"
-                  onChange={(value) => setKeys({ ...keys, anthropic: value })}
-                />
-
-                <APIKeyInput
-                  provider="openai"
-                  displayName="OpenAI (GPT)"
-                  value={keys.openai}
-                  maskedKey={maskedKeys.openai}
-                  placeholder="sk-..."
-                  docsUrl="https://platform.openai.com/api-keys"
-                  colorClass="bg-secondary"
-                  onChange={(value) => setKeys({ ...keys, openai: value })}
-                />
-
-                <APIKeyInput
-                  provider="google"
-                  displayName="Google (Gemini)"
-                  value={keys.google}
-                  maskedKey={maskedKeys.google}
-                  placeholder="AIza..."
-                  docsUrl="https://aistudio.google.com/app/apikey"
-                  colorClass="bg-accent"
-                  onChange={(value) => setKeys({ ...keys, google: value })}
-                />
-
-                <APIKeyInput
-                  provider="tavily"
-                  displayName="Tavily (Web Search)"
-                  value={keys.tavily}
-                  maskedKey={maskedKeys.tavily}
-                  placeholder="tvly-..."
-                  docsUrl="https://tavily.com"
-                  colorClass="bg-blue-500"
-                  onChange={(value) => setKeys({ ...keys, tavily: value })}
-                />
-              </>
+              <Tabs defaultValue={defaultTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="openrouter">OpenRouter (Recommended)</TabsTrigger>
+                  <TabsTrigger value="direct">Direct Provider Keys</TabsTrigger>
+                </TabsList>
+                <TabsContent value="openrouter" className="space-y-4 pt-4">
+                  <p className="text-sm text-muted-foreground">
+                    One API key for access to Claude, GPT, Gemini, and more.
+                  </p>
+                  <APIKeyInput
+                    provider="openrouter"
+                    displayName="OpenRouter"
+                    value={keys.openrouter}
+                    maskedKey={maskedKeys.openrouter}
+                    placeholder="sk-or-..."
+                    docsUrl="https://openrouter.ai/keys"
+                    colorClass="bg-purple-500"
+                    onChange={(value) => setKeys({ ...keys, openrouter: value })}
+                    onSave={(value) => saveKey("openrouter", value)}
+                    onDelete={() => deleteKey("openrouter")}
+                  />
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="space-y-1">
+                      <Label htmlFor="hide-free-models">Hide Free Models</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Hide models with ":free" suffix. Free models have shared rate limits and may be slower or unavailable.
+                      </p>
+                    </div>
+                    <Switch
+                      id="hide-free-models"
+                      checked={hideFreeModels}
+                      onCheckedChange={handleHideFreeModelsChange}
+                      disabled={!maskedKeys.openrouter}
+                    />
+                  </div>
+                </TabsContent>
+                <TabsContent value="direct" className="space-y-4 pt-4">
+                  <p className="text-sm text-muted-foreground">
+                    Use your own API keys from each provider directly.
+                  </p>
+                  <APIKeyInput
+                    provider="anthropic"
+                    displayName="Anthropic (Claude)"
+                    value={keys.anthropic}
+                    maskedKey={maskedKeys.anthropic}
+                    placeholder="sk-ant-..."
+                    docsUrl="https://console.anthropic.com/"
+                    colorClass="bg-primary"
+                    onChange={(value) => setKeys({ ...keys, anthropic: value })}
+                    onSave={(value) => saveKey("anthropic", value)}
+                    onDelete={() => deleteKey("anthropic")}
+                  />
+                  <APIKeyInput
+                    provider="openai"
+                    displayName="OpenAI (GPT)"
+                    value={keys.openai}
+                    maskedKey={maskedKeys.openai}
+                    placeholder="sk-..."
+                    docsUrl="https://platform.openai.com/api-keys"
+                    colorClass="bg-secondary"
+                    onChange={(value) => setKeys({ ...keys, openai: value })}
+                    onSave={(value) => saveKey("openai", value)}
+                    onDelete={() => deleteKey("openai")}
+                  />
+                  <APIKeyInput
+                    provider="google"
+                    displayName="Google (Gemini)"
+                    value={keys.google}
+                    maskedKey={maskedKeys.google}
+                    placeholder="AIza..."
+                    docsUrl="https://aistudio.google.com/app/apikey"
+                    colorClass="bg-accent"
+                    onChange={(value) => setKeys({ ...keys, google: value })}
+                    onSave={(value) => saveKey("google", value)}
+                    onDelete={() => deleteKey("google")}
+                  />
+                </TabsContent>
+              </Tabs>
             )}
+          </CardContent>
+        </Card>
 
-            {message && (
-              <Alert variant={message.type === "error" ? "destructive" : "default"}>
-                <AlertDescription>{message.text}</AlertDescription>
-              </Alert>
+        {/* Web Search */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Web Search</CardTitle>
+            <CardDescription>
+              Enable AI models to search the web for current information.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <Skeleton className="h-20 w-full" />
+            ) : (
+              <APIKeyInput
+                provider="tavily"
+                displayName="Tavily"
+                value={keys.tavily}
+                maskedKey={maskedKeys.tavily}
+                placeholder="tvly-..."
+                docsUrl="https://tavily.com"
+                colorClass="bg-blue-500"
+                onChange={(value) => setKeys({ ...keys, tavily: value })}
+                onSave={(value) => saveKey("tavily", value)}
+                onDelete={() => deleteKey("tavily")}
+              />
             )}
-
-            <Button
-              onClick={saveKeys}
-              disabled={saving || loading}
-              className="w-full"
-              size="lg"
-            >
-              {saving ? "Saving..." : "Save API Keys"}
-            </Button>
           </CardContent>
         </Card>
 

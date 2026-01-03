@@ -3,11 +3,12 @@
  */
 
 import type { TavilySearchResult } from "./tavily";
+import type { AIErrorType } from "./consensus-events";
 
 export interface ModelSelection {
   id: string; // model-1, model-2, model-3
-  provider: "anthropic" | "openai" | "google";
-  modelId: string; // e.g., 'gpt-4o', 'o1-preview', 'claude-3-7-sonnet-20250219'
+  provider: string; // e.g., 'anthropic', 'openai', 'google', 'meta-llama', etc.
+  modelId: string; // e.g., 'gpt-4o', 'claude-3-7-sonnet-20250219', or full OpenRouter ID like 'meta-llama/llama-4-scout'
   label: string; // Display name: 'GPT-4o', 'O1 Preview', 'Claude Sonnet 4.5'
 }
 
@@ -90,6 +91,7 @@ export type ConsensusStreamEvent =
         modelId: string;
         modelLabel: string;
         error: string;
+        errorType?: AIErrorType;
         round: number;
       };
     }
