@@ -262,6 +262,7 @@ export async function getUserConsensusPreferences(
 
 /**
  * Update user's consensus preferences
+ * Uses COALESCE to only update provided values, keeping existing values for nulls
  */
 export async function updateUserConsensusPreferences(
   userId: string,
@@ -271,34 +272,23 @@ export async function updateUserConsensusPreferences(
     evaluatorModel?: string;
   }
 ): Promise<void> {
-  const updates: string[] = [];
-  const values: any[] = [];
-
-  if (preferences.maxRounds !== undefined) {
-    updates.push("consensus_max_rounds = $" + (values.length + 1));
-    values.push(preferences.maxRounds);
-  }
-
-  if (preferences.consensusThreshold !== undefined) {
-    updates.push("consensus_threshold = $" + (values.length + 1));
-    values.push(preferences.consensusThreshold);
-  }
-
-  if (preferences.evaluatorModel !== undefined) {
-    updates.push("consensus_evaluator_model = $" + (values.length + 1));
-    values.push(preferences.evaluatorModel);
-  }
-
-  if (updates.length === 0) {
+  // Skip if no preferences provided
+  if (
+    preferences.maxRounds === undefined &&
+    preferences.consensusThreshold === undefined &&
+    preferences.evaluatorModel === undefined
+  ) {
     return;
   }
 
-  // Using raw SQL for dynamic updates
-  const query = `
+  // Use explicit parameterized query with COALESCE to handle optional updates
+  // This avoids dynamic SQL construction while still supporting partial updates
+  await sql`
     UPDATE users
-    SET ${updates.join(", ")}
-    WHERE id = $${values.length + 1}
+    SET
+      consensus_max_rounds = COALESCE(${preferences.maxRounds ?? null}, consensus_max_rounds),
+      consensus_threshold = COALESCE(${preferences.consensusThreshold ?? null}, consensus_threshold),
+      consensus_evaluator_model = COALESCE(${preferences.evaluatorModel ?? null}, consensus_evaluator_model)
+    WHERE id = ${userId}
   `;
-
-  await sql.query(query, [...values, userId]);
 }

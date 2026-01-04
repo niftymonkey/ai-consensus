@@ -17,18 +17,32 @@ import { searchTavily } from "@/lib/tavily";
 import { generateSearchQuery, shouldSearchWeb } from "@/lib/search-query-generator";
 import { createOpenRouterProvider, getOpenRouterModelId, getModelProvider, parseAIError } from "@/lib/openrouter";
 import { sendEvent, type ConsensusEvent } from "@/lib/consensus-events";
+import { z } from "zod";
 
 export const maxDuration = 300; // 5 minutes for multiple rounds
 export const runtime = "nodejs";
 
-interface ConsensusRequest {
-  prompt: string;
-  models: [ModelSelection, ModelSelection] | [ModelSelection, ModelSelection, ModelSelection];
-  maxRounds?: number;
-  consensusThreshold?: number;
-  evaluatorModel?: string;
-  enableSearch?: boolean;
-}
+// Zod schema for request validation
+const ModelSelectionSchema = z.object({
+  id: z.string().min(1).max(200),
+  provider: z.string().min(1).max(50),
+  modelId: z.string().min(1).max(200),
+  label: z.string().min(1).max(100),
+});
+
+const ConsensusRequestSchema = z.object({
+  prompt: z.string().min(1, "Prompt is required").max(50000, "Prompt too long"),
+  models: z.union([
+    z.tuple([ModelSelectionSchema, ModelSelectionSchema]),
+    z.tuple([ModelSelectionSchema, ModelSelectionSchema, ModelSelectionSchema]),
+  ]),
+  maxRounds: z.number().int().min(1).max(10).default(3),
+  consensusThreshold: z.number().int().min(0).max(100).default(80),
+  evaluatorModel: z.string().max(200).default("claude-3-7-sonnet-20250219"),
+  enableSearch: z.boolean().default(false),
+});
+
+type ConsensusRequest = z.infer<typeof ConsensusRequestSchema>;
 
 /**
  * POST /api/consensus - Multi-round consensus workflow
@@ -41,30 +55,29 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const {
-      prompt,
-      models,
-      maxRounds = 3,
-      consensusThreshold = 80,
-      evaluatorModel = "claude-3-7-sonnet-20250219",
-      enableSearch = false,
-    }: ConsensusRequest = await request.json();
-
-    // Validate prompt
-    if (!prompt || typeof prompt !== "string") {
-      return new Response("Missing or invalid prompt", { status: 400 });
-    }
-
-    // Validate models array (must be 2-3 models)
-    if (!Array.isArray(models) || models.length < 2 || models.length > 3) {
+    // Validate request body with Zod schema
+    const parseResult = ConsensusRequestSchema.safeParse(await request.json());
+    if (!parseResult.success) {
+      const errorMessage = parseResult.error.issues
+        .map((e) => `${e.path.join(".")}: ${e.message}`)
+        .join(", ");
       return new Response(
-        JSON.stringify({ error: "Must select 2-3 models" }),
+        JSON.stringify({ error: `Invalid request: ${errorMessage}` }),
         {
           status: 400,
           headers: { "Content-Type": "application/json" },
         }
       );
     }
+
+    const {
+      prompt,
+      models,
+      maxRounds,
+      consensusThreshold,
+      evaluatorModel,
+      enableSearch,
+    } = parseResult.data;
 
     // Get user's API keys
     const keys = await getApiKeys(session.user.id);
