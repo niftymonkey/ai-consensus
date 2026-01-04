@@ -58,7 +58,7 @@ cp .env.example .env.local
 
 5. Set up the database:
 ```bash
-# Run the schema.sql file in your Postgres database
+pnpm db:setup
 ```
 
 6. Run the development server:
@@ -115,10 +115,10 @@ vercel
 ```
 
 Make sure to:
-1. Set up Vercel Postgres
-2. Run `schema.sql` in your database
-3. Add all environment variables in Vercel dashboard
-4. Configure OAuth redirect URIs
+1. Create a Neon Postgres database in Vercel Storage
+2. Add all environment variables in Vercel dashboard
+3. Run `pnpm db:setup` locally (it uses POSTGRES_URL from your .env.local)
+4. Configure OAuth redirect URIs for your production domain
 
 ## Development Status
 

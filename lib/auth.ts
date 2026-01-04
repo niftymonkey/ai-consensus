@@ -52,16 +52,28 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     async session({ session, token }) {
       if (session.user && token.email) {
-        // Fetch user ID from database
         try {
-          const result = await sql`
+          // Fetch user ID from database
+          let result = await sql`
             SELECT id FROM users WHERE email = ${token.email}
           `;
+
+          // Auto-create user if they don't exist (handles DB reset scenario)
+          if (result.rows.length === 0) {
+            await sql`
+              INSERT INTO users (email, name, image)
+              VALUES (${token.email}, ${token.name || null}, ${token.picture || null})
+            `;
+            result = await sql`
+              SELECT id FROM users WHERE email = ${token.email}
+            `;
+          }
+
           if (result.rows.length > 0) {
             session.user.id = result.rows[0].id.toString();
           }
         } catch (error) {
-          console.error("Error fetching user ID:", error);
+          console.error("Error fetching/creating user:", error);
         }
       }
       return session;
