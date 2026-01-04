@@ -5,9 +5,22 @@ import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
+/**
+ * Validate callback URL to prevent open redirect attacks.
+ * Only allows relative URLs starting with "/" (but not "//").
+ */
+function isValidCallbackUrl(url: string): boolean {
+  // Only allow relative URLs that start with a single slash
+  if (url.startsWith("/") && !url.startsWith("//")) {
+    return true;
+  }
+  return false;
+}
+
 export default function SignInPage() {
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/";
+  const rawCallbackUrl = searchParams.get("callbackUrl") || "/";
+  const callbackUrl = isValidCallbackUrl(rawCallbackUrl) ? rawCallbackUrl : "/";
 
   const handleSignIn = async (provider: "google" | "discord") => {
     await signIn(provider, { callbackUrl });

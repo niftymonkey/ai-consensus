@@ -3,6 +3,29 @@ import Google from "next-auth/providers/google";
 import Discord from "next-auth/providers/discord";
 import { sql } from "@vercel/postgres";
 
+/**
+ * Authentication configuration using NextAuth.js v5
+ *
+ * CSRF Protection Strategy:
+ * -------------------------
+ * NextAuth.js provides built-in CSRF protection through multiple mechanisms:
+ *
+ * 1. Session cookies use SameSite=Lax by default, preventing cross-origin
+ *    requests from including session credentials
+ *
+ * 2. NextAuth.js generates and validates CSRF tokens for auth operations
+ *    (sign-in, sign-out, callback handling)
+ *
+ * 3. API routes are additionally protected because:
+ *    - They require Content-Type: application/json (browsers don't send this cross-origin)
+ *    - They validate the session JWT on each request
+ *    - Modern browsers enforce CORS preflight for non-simple requests
+ *
+ * This combination provides defense-in-depth against CSRF attacks without
+ * requiring explicit CSRF tokens in the application code.
+ *
+ * Reference: https://next-auth.js.org/getting-started/rest-api#get-apiauthcsrf
+ */
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     Google({
