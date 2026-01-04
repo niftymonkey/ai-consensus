@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
       // Legacy direct model ID format
       if (modelId.startsWith("claude")) return "anthropic";
       if (modelId.startsWith("gemini")) return "google";
-      if (modelId.startsWith("gpt") || modelId.startsWith("o1") || modelId.startsWith("o3")) return "openai";
+      if (modelId.startsWith("gpt") || modelId.startsWith("chatgpt") || modelId.startsWith("o1") || modelId.startsWith("o3") || modelId.startsWith("o4")) return "openai";
       return "unknown";
     };
 

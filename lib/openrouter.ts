@@ -69,7 +69,7 @@ export function getModelProvider(modelId: string): "anthropic" | "openai" | "goo
   if (modelId.startsWith("claude") || modelId.includes("anthropic")) {
     return "anthropic";
   }
-  if (modelId.startsWith("gpt") || modelId.startsWith("o1") || modelId.startsWith("o3") || modelId.startsWith("chatgpt")) {
+  if (modelId.startsWith("gpt") || modelId.startsWith("chatgpt") || modelId.startsWith("o1") || modelId.startsWith("o3") || modelId.startsWith("o4")) {
     return "openai";
   }
   if (modelId.startsWith("gemini")) {
