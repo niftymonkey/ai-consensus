@@ -32,10 +32,8 @@ yarn-error.log*
 
 # env files (do not commit real credentials)
 .env
-.env*.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 
 # vercel
 .vercel
@@ -52,5 +50,3 @@ yarn-error.log*
 
 # pnpm
 .pnpm-debug.log*
-
-plans/

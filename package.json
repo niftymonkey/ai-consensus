@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "migrate": "tsx scripts/migrate.ts"
+    "migrate": "tsx scripts/migrate.ts",
+    "security": "pnpm security:code && pnpm security:secrets",
+    "security:code": "docker run --rm -v \"$(pwd):/src\" semgrep/semgrep semgrep scan --config auto",
+    "security:secrets": "docker run --rm -v \"$(pwd):/repo\" trufflesecurity/trufflehog:latest git file:///repo --only-verified --fail"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.55",
@@ -37,8 +40,8 @@
     "cmdk": "^1.1.1",
     "crypto-js": "^4.2.0",
     "lucide-react": "^0.560.0",
-    "next": "16.0.9",
-    "next-auth": "5.0.0-beta.25",
+    "next": "16.0.10",
+    "next-auth": "5.0.0-beta.30",
     "next-themes": "^0.4.6",
     "react": "19.2.2",
     "react-dom": "19.2.2",

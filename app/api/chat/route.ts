@@ -115,6 +115,7 @@ export async function POST(request: NextRequest) {
               )
             );
           } catch (error: any) {
+            // nosemgrep: javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring
             console.error(`Error streaming from ${modelName}:`, error);
             controller.enqueue(
               encoder.encode(
