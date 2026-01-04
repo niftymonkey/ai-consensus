@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "migrate": "tsx scripts/migrate.ts",
-    "security": "docker run --rm -v \"$(pwd):/src\" semgrep/semgrep semgrep scan --config auto"
+    "security": "pnpm security:code && pnpm security:secrets",
+    "security:code": "docker run --rm -v \"$(pwd):/src\" semgrep/semgrep semgrep scan --config auto",
+    "security:secrets": "docker run --rm -v \"$(pwd):/repo\" trufflesecurity/trufflehog:latest git file:///repo --only-verified --fail"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.55",
