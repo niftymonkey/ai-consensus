@@ -76,6 +76,7 @@ export default function ConsensusPage() {
   const [consensusThreshold, setConsensusThreshold] = useState(80);
   const [evaluatorModel, setEvaluatorModel] = useState("claude-3-7-sonnet-20250219");
   const [enableSearch, setEnableSearch] = useState(false);
+  const [settingsExpanded, setSettingsExpanded] = useState(true);
 
   // Model selection (2-3 models)
   const [selectedModels, setSelectedModels] = useState<ModelSelection[]>([]);
@@ -649,7 +650,7 @@ export default function ConsensusPage() {
         </div>
       )}
 
-      <div className="space-y-10">
+      <div className="space-y-4">
 
         {/* Input */}
         <div className="mx-auto w-full max-w-4xl">
@@ -679,6 +680,8 @@ export default function ConsensusPage() {
               setEnableSearch={setEnableSearch}
               disabled={isProcessing || isSynthesizing || isGeneratingProgression}
               isProcessing={isProcessing || isSynthesizing || isGeneratingProgression}
+              isExpanded={settingsExpanded}
+              setIsExpanded={setSettingsExpanded}
               openRouterModels={models}
               openRouterGroupedModels={groupedModels}
               openRouterLoading={modelsLoading}

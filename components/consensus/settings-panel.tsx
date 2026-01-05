@@ -43,6 +43,8 @@ interface SettingsPanelProps {
   setEnableSearch: (value: boolean) => void;
   disabled?: boolean;
   isProcessing?: boolean;
+  isExpanded: boolean;
+  setIsExpanded: (expanded: boolean) => void;
   // OpenRouter models for the unified model selector
   openRouterModels: OpenRouterModelWithMeta[];
   openRouterGroupedModels: Record<string, OpenRouterModelWithMeta[]>;
@@ -65,11 +67,12 @@ export function SettingsPanel({
   setEnableSearch,
   disabled = false,
   isProcessing = false,
+  isExpanded,
+  setIsExpanded,
   openRouterModels,
   openRouterGroupedModels,
   openRouterLoading = false,
 }: SettingsPanelProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
   const [hasLoadedPreferences, setHasLoadedPreferences] = useState(false);
 
   // Auto-collapse when processing starts
@@ -77,7 +80,7 @@ export function SettingsPanel({
     if (isProcessing) {
       setIsExpanded(false);
     }
-  }, [isProcessing]);
+  }, [isProcessing, setIsExpanded]);
 
   // Load preferences on mount
   useEffect(() => {
@@ -117,7 +120,7 @@ export function SettingsPanel({
       console.error("Failed to load consensus preferences:", error);
       setHasLoadedPreferences(true);
     }
-  }, [hasLoadedPreferences]);
+  }, [hasLoadedPreferences, setIsExpanded]);
 
   // Save preferences to localStorage
   const savePreferences = useCallback(() => {
@@ -165,35 +168,53 @@ export function SettingsPanel({
     };
   }, [selectedModels, maxRounds, consensusThreshold, evaluatorModel, enableSearch, hasLoadedPreferences, savePreferences]);
 
-  // Generate summary text for collapsed state
-  const getSummary = () => {
-    const modelCount = selectedModels.length;
-    const searchStatus = enableSearch ? 'search on' : 'search off';
-    return `${modelCount} model${modelCount !== 1 ? 's' : ''}, ${maxRounds} round${maxRounds !== 1 ? 's' : ''}, ${consensusThreshold}% threshold, ${searchStatus}`;
+  // Get provider color for model chip
+  const getProviderColor = (provider: string) => {
+    switch (provider) {
+      case "anthropic":
+        return "bg-orange-500/20 text-orange-400 border-orange-500/30";
+      case "openai":
+        return "bg-green-500/20 text-green-400 border-green-500/30";
+      case "google":
+        return "bg-blue-500/20 text-blue-400 border-blue-500/30";
+      default:
+        return "bg-purple-500/20 text-purple-400 border-purple-500/30";
+    }
   };
 
   if (!isExpanded) {
     return (
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <SettingsIcon className="h-5 w-5" />
-              <CardTitle className="text-base">Settings</CardTitle>
-              <span className="text-sm text-muted-foreground">({getSummary()})</span>
+      <button
+        onClick={() => !disabled && setIsExpanded(true)}
+        disabled={disabled}
+        className="w-full text-left"
+      >
+        <Card className="transition-colors hover:bg-accent/50 cursor-pointer">
+          <div className="px-4 py-3 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 flex-wrap min-w-0">
+              {/* Model chips */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {selectedModels.map((model) => (
+                  <span
+                    key={model.id}
+                    className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border ${getProviderColor(model.provider)}`}
+                  >
+                    {model.label}
+                  </span>
+                ))}
+              </div>
+              {/* Settings summary */}
+              <span className="text-sm text-muted-foreground whitespace-nowrap">
+                • {maxRounds} round{maxRounds !== 1 ? "s" : ""} • {consensusThreshold}%{enableSearch ? " • search" : ""}
+              </span>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsExpanded(true)}
-              disabled={disabled}
-            >
-              <ChevronDown className="h-4 w-4 mr-1" />
-              Expand
-            </Button>
+            <div className="flex items-center gap-2 text-muted-foreground shrink-0">
+              <SettingsIcon className="h-4 w-4" />
+              <ChevronDown className="h-4 w-4" />
+            </div>
           </div>
-        </CardHeader>
-      </Card>
+        </Card>
+      </button>
     );
   }
 
