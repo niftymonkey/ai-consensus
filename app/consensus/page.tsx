@@ -653,7 +653,7 @@ export default function ConsensusPage() {
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-3">
 
         {/* Input */}
         <div className="mx-auto w-full max-w-4xl">

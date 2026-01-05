@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -10,6 +11,15 @@ interface ProgressionSummaryProps {
 }
 
 export function ProgressionSummary({ progressionSummary, isStreaming = false }: ProgressionSummaryProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll when content updates during streaming
+  useEffect(() => {
+    if (isStreaming && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [progressionSummary, isStreaming]);
+
   return (
     <Card>
       <CardHeader>
@@ -21,7 +31,7 @@ export function ProgressionSummary({ progressionSummary, isStreaming = false }: 
           How the models refined their perspectives across rounds
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent ref={scrollRef} className="max-h-[600px] overflow-y-auto">
         {!progressionSummary ? (
           <p className="text-muted-foreground animate-pulse">Analyzing how consensus evolved...</p>
         ) : (

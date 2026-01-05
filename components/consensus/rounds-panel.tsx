@@ -211,7 +211,9 @@ export function RoundsPanel({
                       className={`text-xs text-white ${
                         roundData.evaluation.score >= consensusThreshold
                           ? "bg-green-500 hover:bg-green-600"
-                          : "bg-red-500 hover:bg-red-600"
+                          : roundData.evaluation.score >= consensusThreshold - 10
+                            ? "bg-amber-500 hover:bg-amber-600"
+                            : "bg-red-500 hover:bg-red-600"
                       }`}
                     >
                       {roundData.evaluation.emoji && <span className="mr-1">{roundData.evaluation.emoji}</span>}

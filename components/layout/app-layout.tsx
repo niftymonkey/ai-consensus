@@ -23,11 +23,6 @@ export function AppLayout({ children }: AppLayoutProps) {
       <main className="flex-1">
         {children}
       </main>
-      <footer className="border-t bg-card py-4">
-        <div className="container text-center text-sm text-muted-foreground">
-          Powered by Claude, GPT, and Gemini
-        </div>
-      </footer>
     </div>
   );
 }

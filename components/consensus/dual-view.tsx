@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import ReactMarkdown from "react-markdown";
@@ -26,6 +27,15 @@ export function DualView({
   isGeneratingProgression = false,
   isSynthesizing = false,
 }: DualViewProps) {
+  const consensusScrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll consensus section when content updates during streaming
+  useEffect(() => {
+    if (isSynthesizing && consensusScrollRef.current) {
+      consensusScrollRef.current.scrollTop = consensusScrollRef.current.scrollHeight;
+    }
+  }, [consensusContent, isSynthesizing]);
+
   // Show consensus section if synthesis has started (even if it completed)
   const showConsensus = isSynthesizing || consensusContent;
 
@@ -48,7 +58,7 @@ export function DualView({
               Synthesized response incorporating all model insights
             </CardDescription>
           </CardHeader>
-          <CardContent className="max-h-[600px] overflow-y-auto">
+          <CardContent ref={consensusScrollRef} className="max-h-[600px] overflow-y-auto">
             <div className="markdown-content">
               {!consensusContent ? (
                 <p className="text-muted-foreground animate-pulse">Generating consensus...</p>
