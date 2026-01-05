@@ -225,10 +225,8 @@ export default function ConsensusPage() {
     setOverallStatus(null);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-
-    if (!prompt.trim()) return;
+  async function submitConsensus(promptValue: string) {
+    if (!promptValue.trim()) return;
     if (selectedModels.length < 2 || selectedModels.length > 3) {
       toast.error("Invalid model selection", {
         description: "Please select 2-3 models to continue.",
@@ -283,7 +281,7 @@ export default function ConsensusPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt,
+          prompt: promptValue,
           models: selectedModels,
           maxRounds,
           consensusThreshold,
@@ -367,6 +365,11 @@ export default function ConsensusPage() {
         abortControllerRef.current = null;
       }
     }
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    submitConsensus(prompt);
   }
 
   function handleStreamEvent(event: ConsensusStreamEvent) {
@@ -659,7 +662,9 @@ export default function ConsensusPage() {
             setPrompt={setPrompt}
             isLoading={isProcessing || isSynthesizing || isGeneratingProgression}
             onSubmit={handleSubmit}
+            onSubmitWithPrompt={submitConsensus}
             onCancel={handleCancel}
+            showSuggestions={!finalConsensus}
           />
         </div>
 
