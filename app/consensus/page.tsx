@@ -677,7 +677,8 @@ export default function ConsensusPage() {
               setEvaluatorModel={setEvaluatorModel}
               enableSearch={enableSearch}
               setEnableSearch={setEnableSearch}
-              disabled={isProcessing}
+              disabled={isProcessing || isSynthesizing || isGeneratingProgression}
+              isProcessing={isProcessing || isSynthesizing || isGeneratingProgression}
               openRouterModels={models}
               openRouterGroupedModels={groupedModels}
               openRouterLoading={modelsLoading}

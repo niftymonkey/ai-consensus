@@ -42,6 +42,7 @@ interface SettingsPanelProps {
   enableSearch: boolean;
   setEnableSearch: (value: boolean) => void;
   disabled?: boolean;
+  isProcessing?: boolean;
   // OpenRouter models for the unified model selector
   openRouterModels: OpenRouterModelWithMeta[];
   openRouterGroupedModels: Record<string, OpenRouterModelWithMeta[]>;
@@ -63,12 +64,20 @@ export function SettingsPanel({
   enableSearch,
   setEnableSearch,
   disabled = false,
+  isProcessing = false,
   openRouterModels,
   openRouterGroupedModels,
   openRouterLoading = false,
 }: SettingsPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [hasLoadedPreferences, setHasLoadedPreferences] = useState(false);
+
+  // Auto-collapse when processing starts
+  useEffect(() => {
+    if (isProcessing) {
+      setIsExpanded(false);
+    }
+  }, [isProcessing]);
 
   // Load preferences on mount
   useEffect(() => {
