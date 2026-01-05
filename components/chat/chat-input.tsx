@@ -10,11 +10,10 @@ interface ChatInputProps {
   isLoading: boolean;
   onSubmit: (e: React.FormEvent) => void;
   onSubmitWithPrompt?: (prompt: string) => void;
-  onCancel?: () => void;
   showSuggestions?: boolean;
 }
 
-export function ChatInput({ prompt, setPrompt, isLoading, onSubmit, onSubmitWithPrompt, onCancel, showSuggestions = false }: ChatInputProps) {
+export function ChatInput({ prompt, setPrompt, isLoading, onSubmit, onSubmitWithPrompt, showSuggestions = false }: ChatInputProps) {
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -22,15 +21,6 @@ export function ChatInput({ prompt, setPrompt, isLoading, onSubmit, onSubmitWith
       if (!isLoading) {
         onSubmit(e as any);
       }
-    }
-  }
-
-  function handleButtonClick(e: React.MouseEvent<HTMLButtonElement>) {
-    // When loading, button type is "button" (not "submit"), so we handle the click
-    // When not loading, button type is "submit", so form submission happens naturally
-    if (isLoading && onCancel) {
-      e.preventDefault();
-      onCancel();
     }
   }
 
@@ -69,12 +59,10 @@ export function ChatInput({ prompt, setPrompt, isLoading, onSubmit, onSubmitWith
               Press Enter to send, Shift+Enter for new line
             </p>
             <Button
-              type={isLoading ? "button" : "submit"}
-              disabled={isLoading ? false : !prompt.trim()}
-              onClick={handleButtonClick}
-              variant={isLoading ? "destructive" : "default"}
+              type="submit"
+              disabled={isLoading || !prompt.trim()}
             >
-              {isLoading ? "Cancel" : "Ask"}
+              {isLoading ? "Asking..." : "Ask"}
             </Button>
           </div>
         </CardContent>

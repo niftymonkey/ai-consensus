@@ -663,7 +663,6 @@ export default function ConsensusPage() {
             isLoading={isProcessing || isSynthesizing || isGeneratingProgression}
             onSubmit={handleSubmit}
             onSubmitWithPrompt={submitConsensus}
-            onCancel={handleCancel}
             showSuggestions={!finalConsensus}
           />
         </div>
