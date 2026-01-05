@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowDown, ArrowDownCircle } from "lucide-react";
 import {
@@ -26,6 +27,19 @@ export function AutoScrollToggle({
   isUserScrolling = false,
   show = true,
 }: AutoScrollToggleProps) {
+  const [isPulsing, setIsPulsing] = useState(false);
+  const prevEnabledRef = useRef(enabled);
+
+  // Pulse animation when auto-scroll transitions from ON to OFF
+  useEffect(() => {
+    if (prevEnabledRef.current && !enabled) {
+      setIsPulsing(true);
+      const timer = setTimeout(() => setIsPulsing(false), 1000);
+      return () => clearTimeout(timer);
+    }
+    prevEnabledRef.current = enabled;
+  }, [enabled]);
+
   if (!show) return null;
 
   const handleClick = () => {
@@ -46,7 +60,9 @@ export function AutoScrollToggle({
             <Button
               variant={enabled ? "default" : "outline"}
               onClick={handleClick}
-              className="h-12 rounded-full shadow-lg transition-all hover:scale-105 flex items-center gap-2 px-4"
+              className={`h-12 rounded-full shadow-lg transition-all hover:scale-105 flex items-center gap-2 px-4 ${
+                isPulsing ? "animate-pulse ring-2 ring-amber-500 ring-offset-2" : ""
+              }`}
             >
               {enabled ? (
                 <ArrowDownCircle className="h-5 w-5" />

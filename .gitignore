@@ -51,3 +51,5 @@ yarn-error.log*
 # pnpm
 .pnpm-debug.log*
 .env*.local
+
+.playwright-mcp/

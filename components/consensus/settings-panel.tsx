@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -11,6 +11,7 @@ import { UnifiedModelSelector } from "./unified-model-selector";
 import { ConsensusSettings } from "./consensus-settings";
 import type { ModelSelection } from "@/lib/types";
 import type { OpenRouterModelWithMeta } from "@/lib/openrouter-models";
+import { getProviderColor } from "@/lib/provider-colors";
 
 interface AvailableKeys {
   anthropic: boolean;
@@ -42,6 +43,9 @@ interface SettingsPanelProps {
   enableSearch: boolean;
   setEnableSearch: (value: boolean) => void;
   disabled?: boolean;
+  isProcessing?: boolean;
+  isExpanded: boolean;
+  setIsExpanded: (expanded: boolean) => void;
   // OpenRouter models for the unified model selector
   openRouterModels: OpenRouterModelWithMeta[];
   openRouterGroupedModels: Record<string, OpenRouterModelWithMeta[]>;
@@ -63,12 +67,21 @@ export function SettingsPanel({
   enableSearch,
   setEnableSearch,
   disabled = false,
+  isProcessing = false,
+  isExpanded,
+  setIsExpanded,
   openRouterModels,
   openRouterGroupedModels,
   openRouterLoading = false,
 }: SettingsPanelProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
   const [hasLoadedPreferences, setHasLoadedPreferences] = useState(false);
+
+  // Auto-collapse when processing starts
+  useEffect(() => {
+    if (isProcessing) {
+      setIsExpanded(false);
+    }
+  }, [isProcessing, setIsExpanded]);
 
   // Load preferences on mount
   useEffect(() => {
@@ -108,10 +121,10 @@ export function SettingsPanel({
       console.error("Failed to load consensus preferences:", error);
       setHasLoadedPreferences(true);
     }
-  }, [hasLoadedPreferences]);
+  }, [hasLoadedPreferences, setIsExpanded]);
 
-  // Save preferences
-  const savePreferences = () => {
+  // Save preferences to localStorage
+  const savePreferences = useCallback(() => {
     try {
       const prefs: ConsensusPreferences = {
         models: selectedModels.map(m => ({
@@ -127,42 +140,68 @@ export function SettingsPanel({
       };
 
       localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-      setIsExpanded(false);
     } catch (error) {
       console.error("Failed to save consensus preferences:", error);
-      alert("Failed to save preferences");
     }
-  };
+  }, [selectedModels, maxRounds, consensusThreshold, evaluatorModel, enableSearch]);
 
-  // Generate summary text for collapsed state
-  const getSummary = () => {
-    const modelCount = selectedModels.length;
-    const searchStatus = enableSearch ? 'search on' : 'search off';
-    return `${modelCount} model${modelCount !== 1 ? 's' : ''}, ${maxRounds} round${maxRounds !== 1 ? 's' : ''}, ${consensusThreshold}% threshold, ${searchStatus}`;
-  };
+  // Auto-save preferences when settings change (debounced)
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // Don't auto-save until initial preferences have been loaded
+    if (!hasLoadedPreferences) return;
+
+    // Clear any pending save
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Debounce save by 300ms
+    saveTimeoutRef.current = setTimeout(() => {
+      savePreferences();
+    }, 300);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [selectedModels, maxRounds, consensusThreshold, evaluatorModel, enableSearch, hasLoadedPreferences, savePreferences]);
 
   if (!isExpanded) {
     return (
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <SettingsIcon className="h-5 w-5" />
-              <CardTitle className="text-base">Settings</CardTitle>
-              <span className="text-sm text-muted-foreground">({getSummary()})</span>
+      <button
+        onClick={() => !disabled && setIsExpanded(true)}
+        disabled={disabled}
+        className="w-full text-left"
+      >
+        <Card className="transition-colors hover:bg-accent/50 cursor-pointer">
+          <div className="px-4 py-3 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 flex-wrap min-w-0">
+              {/* Model chips */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {selectedModels.map((model) => (
+                  <span
+                    key={model.id}
+                    className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border ${getProviderColor(model.provider)}`}
+                  >
+                    {model.label}
+                  </span>
+                ))}
+              </div>
+              {/* Settings summary */}
+              <span className="text-sm text-muted-foreground whitespace-nowrap">
+                • {maxRounds} round{maxRounds !== 1 ? "s" : ""} • {consensusThreshold}%{enableSearch ? " • search" : ""}
+              </span>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsExpanded(true)}
-              disabled={disabled}
-            >
-              <ChevronDown className="h-4 w-4 mr-1" />
-              Expand
-            </Button>
+            <div className="flex items-center gap-2 text-muted-foreground shrink-0">
+              <SettingsIcon className="h-4 w-4" />
+              <ChevronDown className="h-4 w-4" />
+            </div>
           </div>
-        </CardHeader>
-      </Card>
+        </Card>
+      </button>
     );
   }
 
@@ -230,15 +269,6 @@ export function SettingsPanel({
             onCheckedChange={setEnableSearch}
             disabled={disabled || !availableKeys.tavily}
           />
-        </div>
-
-        <div className="flex justify-end">
-          <Button
-            onClick={savePreferences}
-            disabled={disabled || selectedModels.length < 2}
-          >
-            Use These Settings
-          </Button>
         </div>
       </CardContent>
     </Card>

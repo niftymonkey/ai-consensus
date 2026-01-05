@@ -76,6 +76,7 @@ export default function ConsensusPage() {
   const [consensusThreshold, setConsensusThreshold] = useState(80);
   const [evaluatorModel, setEvaluatorModel] = useState("claude-3-7-sonnet-20250219");
   const [enableSearch, setEnableSearch] = useState(false);
+  const [settingsExpanded, setSettingsExpanded] = useState(true);
 
   // Model selection (2-3 models)
   const [selectedModels, setSelectedModels] = useState<ModelSelection[]>([]);
@@ -84,6 +85,7 @@ export default function ConsensusPage() {
   const [rounds, setRounds] = useState<RoundData[]>([]);
   const [currentRound, setCurrentRound] = useState(0);
   const [currentRoundResponses, setCurrentRoundResponses] = useState<Map<string, string>>(new Map());
+  const [completedModels, setCompletedModels] = useState<Set<string>>(new Set());
   const [currentSearchData, setCurrentSearchData] = useState<import("@/lib/types").SearchData | null>(null);
   const [currentEvaluation, setCurrentEvaluation] = useState<Partial<ConsensusEvaluation> | null>(null);
   const [finalConsensus, setFinalConsensus] = useState<string | null>(null);
@@ -224,10 +226,8 @@ export default function ConsensusPage() {
     setOverallStatus(null);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-
-    if (!prompt.trim()) return;
+  async function submitConsensus(promptValue: string) {
+    if (!promptValue.trim()) return;
     if (selectedModels.length < 2 || selectedModels.length > 3) {
       toast.error("Invalid model selection", {
         description: "Please select 2-3 models to continue.",
@@ -246,6 +246,7 @@ export default function ConsensusPage() {
     setRounds([]);
     setCurrentRound(0);
     setCurrentRoundResponses(new Map());
+    setCompletedModels(new Set());
     setCurrentSearchData(null);
     setCurrentEvaluation(null);
     setFinalConsensus(null);
@@ -264,7 +265,7 @@ export default function ConsensusPage() {
     // Create abort controller for this request
     abortControllerRef.current = new AbortController();
 
-    // Set client-side timeout safeguard (5 minutes - matches API maxDuration)
+    // Set client-side timeout safeguard (10 minutes - matches API maxDuration)
     // This is the last-resort failsafe; individual operations have their own timeouts
     timeoutIdRef.current = setTimeout(() => {
       // Only abort if there's still an active request
@@ -275,14 +276,14 @@ export default function ConsensusPage() {
         });
         handleCancel();
       }
-    }, 300000);
+    }, 600000);
 
     try {
       const response = await fetch("/api/consensus", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt,
+          prompt: promptValue,
           models: selectedModels,
           maxRounds,
           consensusThreshold,
@@ -368,6 +369,11 @@ export default function ConsensusPage() {
     }
   }
 
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    submitConsensus(prompt);
+  }
+
   function handleStreamEvent(event: ConsensusStreamEvent) {
     switch (event.type) {
       case "start":
@@ -380,6 +386,7 @@ export default function ConsensusPage() {
         currentRoundRef.current = event.data.roundNumber;
         setCurrentRoundResponses(new Map());
         currentRoundResponsesRef.current = new Map();
+        setCompletedModels(new Set());
         setCurrentEvaluation(null);
         currentEvaluationRef.current = null;
         setCurrentSearchData(null);
@@ -415,6 +422,14 @@ export default function ConsensusPage() {
         setOverallStatus(`Round ${event.data.round}: Receiving responses from models...`);
         // Trigger auto-scroll for streaming responses
         setScrollTrigger(prev => prev + 1);
+        break;
+
+      case "model-complete":
+        setCompletedModels((prev) => {
+          const updated = new Set(prev);
+          updated.add(event.data.modelId);
+          return updated;
+        });
         break;
 
       case "evaluation": {
@@ -649,7 +664,7 @@ export default function ConsensusPage() {
         </div>
       )}
 
-      <div className="space-y-10">
+      <div className="space-y-3">
 
         {/* Input */}
         <div className="mx-auto w-full max-w-4xl">
@@ -658,7 +673,8 @@ export default function ConsensusPage() {
             setPrompt={setPrompt}
             isLoading={isProcessing || isSynthesizing || isGeneratingProgression}
             onSubmit={handleSubmit}
-            onCancel={handleCancel}
+            onSubmitWithPrompt={submitConsensus}
+            showSuggestions={!finalConsensus}
           />
         </div>
 
@@ -677,7 +693,10 @@ export default function ConsensusPage() {
               setEvaluatorModel={setEvaluatorModel}
               enableSearch={enableSearch}
               setEnableSearch={setEnableSearch}
-              disabled={isProcessing}
+              disabled={isProcessing || isSynthesizing || isGeneratingProgression}
+              isProcessing={isProcessing || isSynthesizing || isGeneratingProgression}
+              isExpanded={settingsExpanded}
+              setIsExpanded={setSettingsExpanded}
               openRouterModels={models}
               openRouterGroupedModels={groupedModels}
               openRouterLoading={modelsLoading}
@@ -698,6 +717,7 @@ export default function ConsensusPage() {
             currentRoundResponses={currentRoundResponses}
             currentSearchData={currentSearchData}
             currentEvaluation={currentEvaluation}
+            completedModels={completedModels}
             onUserInteraction={pauseAutoScroll}
             resetToCurrentRound={shouldResetToCurrentRound}
           />

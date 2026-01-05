@@ -82,6 +82,13 @@ export type ConsensusStreamEvent =
         round: number;
       };
     }
+  | {
+      type: "model-complete";
+      data: {
+        modelId: string;
+        round: number;
+      };
+    }
   | { type: "evaluation-start"; round: number }
   | { type: "evaluation"; data: Partial<ConsensusEvaluation>; round: number }
   | { type: "evaluation-complete"; round: number }

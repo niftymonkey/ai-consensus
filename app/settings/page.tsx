@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { SettingsHeader } from "@/components/settings/settings-header";
 import { APIKeyInput } from "@/components/settings/api-key-input";
-import { SecurityNotice } from "@/components/settings/security-notice";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -121,7 +120,7 @@ export default function SettingsPage() {
 
   return (
     <div className="container py-12">
-      <div className="mx-auto max-w-4xl space-y-6">
+      <div className="mx-auto max-w-4xl space-y-3">
         <SettingsHeader />
 
         {/* Model Provider Keys */}
@@ -248,8 +247,6 @@ export default function SettingsPage() {
             )}
           </CardContent>
         </Card>
-
-        <SecurityNotice />
       </div>
     </div>
   );
