@@ -147,12 +147,7 @@ export function RoundsPanel({
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>Rounds</CardTitle>
-          <span className="text-sm text-muted-foreground">
-            Round {currentRound} of {maxRounds}
-          </span>
-        </div>
+        <CardTitle>Rounds</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Round Indicators */}
