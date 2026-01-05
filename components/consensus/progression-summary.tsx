@@ -2,6 +2,7 @@
 
 import { useRef, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Target } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -24,7 +25,7 @@ export function ProgressionSummary({ progressionSummary, isStreaming = false }: 
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <span className="text-2xl">🎯</span>
+          <Target className="h-5 w-5" />
           <span>Evolution of Consensus</span>
         </CardTitle>
         <CardDescription>

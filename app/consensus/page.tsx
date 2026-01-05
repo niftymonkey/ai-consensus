@@ -85,6 +85,7 @@ export default function ConsensusPage() {
   const [rounds, setRounds] = useState<RoundData[]>([]);
   const [currentRound, setCurrentRound] = useState(0);
   const [currentRoundResponses, setCurrentRoundResponses] = useState<Map<string, string>>(new Map());
+  const [completedModels, setCompletedModels] = useState<Set<string>>(new Set());
   const [currentSearchData, setCurrentSearchData] = useState<import("@/lib/types").SearchData | null>(null);
   const [currentEvaluation, setCurrentEvaluation] = useState<Partial<ConsensusEvaluation> | null>(null);
   const [finalConsensus, setFinalConsensus] = useState<string | null>(null);
@@ -245,6 +246,7 @@ export default function ConsensusPage() {
     setRounds([]);
     setCurrentRound(0);
     setCurrentRoundResponses(new Map());
+    setCompletedModels(new Set());
     setCurrentSearchData(null);
     setCurrentEvaluation(null);
     setFinalConsensus(null);
@@ -263,7 +265,7 @@ export default function ConsensusPage() {
     // Create abort controller for this request
     abortControllerRef.current = new AbortController();
 
-    // Set client-side timeout safeguard (5 minutes - matches API maxDuration)
+    // Set client-side timeout safeguard (10 minutes - matches API maxDuration)
     // This is the last-resort failsafe; individual operations have their own timeouts
     timeoutIdRef.current = setTimeout(() => {
       // Only abort if there's still an active request
@@ -274,7 +276,7 @@ export default function ConsensusPage() {
         });
         handleCancel();
       }
-    }, 300000);
+    }, 600000);
 
     try {
       const response = await fetch("/api/consensus", {
@@ -384,6 +386,7 @@ export default function ConsensusPage() {
         currentRoundRef.current = event.data.roundNumber;
         setCurrentRoundResponses(new Map());
         currentRoundResponsesRef.current = new Map();
+        setCompletedModels(new Set());
         setCurrentEvaluation(null);
         currentEvaluationRef.current = null;
         setCurrentSearchData(null);
@@ -419,6 +422,14 @@ export default function ConsensusPage() {
         setOverallStatus(`Round ${event.data.round}: Receiving responses from models...`);
         // Trigger auto-scroll for streaming responses
         setScrollTrigger(prev => prev + 1);
+        break;
+
+      case "model-complete":
+        setCompletedModels((prev) => {
+          const updated = new Set(prev);
+          updated.add(event.data.modelId);
+          return updated;
+        });
         break;
 
       case "evaluation": {
@@ -706,6 +717,7 @@ export default function ConsensusPage() {
             currentRoundResponses={currentRoundResponses}
             currentSearchData={currentSearchData}
             currentEvaluation={currentEvaluation}
+            completedModels={completedModels}
             onUserInteraction={pauseAutoScroll}
             resetToCurrentRound={shouldResetToCurrentRound}
           />

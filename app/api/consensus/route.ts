@@ -19,7 +19,7 @@ import { createOpenRouterProvider, getOpenRouterModelId, getModelProvider, parse
 import { sendEvent, type ConsensusEvent } from "@/lib/consensus-events";
 import { z } from "zod";
 
-export const maxDuration = 300; // 5 minutes for multiple rounds
+export const maxDuration = 600; // 10 minutes for multiple rounds
 export const runtime = "nodejs";
 
 // Zod schema for request validation
@@ -754,6 +754,15 @@ async function generateRoundResponses(opts: {
         throw apiError || streamError;
       }
 
+      // Signal that this model has finished streaming
+      safeEnqueue({
+        type: "model-complete",
+        data: {
+          modelId: modelSelection.id,
+          round: opts.round,
+        },
+      });
+
       // Buffer complete response for evaluation
       responses.set(modelSelection.id, fullResponse);
     } catch (error) {
@@ -878,6 +887,7 @@ Create a single, unified response that:
 2. Presents a balanced, consensus view
 3. Acknowledges any remaining differences if they exist
 4. Provides a clear, coherent answer
+5. Does NOT use any emojis or unicode symbols - use plain text only
 
 Generate the consensus response:`;
 
@@ -996,6 +1006,7 @@ Create a compelling narrative summary that describes how the consensus evolved a
   - Use **bold** for model names and key terms
   - Use *italics* for emphasis on important shifts or insights
   - Consider using bullet points or numbered lists where appropriate
+- **Do NOT use any emojis or unicode symbols** - use plain text and markdown only
 
 Generate the progression summary:`;
 

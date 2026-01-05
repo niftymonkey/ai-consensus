@@ -21,6 +21,11 @@ export interface ModelResponseData {
   round: number;
 }
 
+export interface ModelCompleteData {
+  modelId: string;
+  round: number;
+}
+
 export interface RoundStatusData {
   roundNumber: number;
   maxRounds: number;
@@ -65,6 +70,7 @@ export type ConsensusEvent =
   | { type: "search-complete"; data: SearchCompleteData }
   | { type: "search-error"; data: SearchErrorData }
   | { type: "model-response"; data: ModelResponseData }
+  | { type: "model-complete"; data: ModelCompleteData }
   | { type: "model-error"; data: ModelErrorData }
   | { type: "evaluation-start"; round: number }
   | { type: "evaluation"; data: Partial<ConsensusEvaluation>; round: number }

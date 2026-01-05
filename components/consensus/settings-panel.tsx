@@ -11,6 +11,7 @@ import { UnifiedModelSelector } from "./unified-model-selector";
 import { ConsensusSettings } from "./consensus-settings";
 import type { ModelSelection } from "@/lib/types";
 import type { OpenRouterModelWithMeta } from "@/lib/openrouter-models";
+import { getProviderColor } from "@/lib/provider-colors";
 
 interface AvailableKeys {
   anthropic: boolean;
@@ -167,20 +168,6 @@ export function SettingsPanel({
       }
     };
   }, [selectedModels, maxRounds, consensusThreshold, evaluatorModel, enableSearch, hasLoadedPreferences, savePreferences]);
-
-  // Get provider color for model chip
-  const getProviderColor = (provider: string) => {
-    switch (provider) {
-      case "anthropic":
-        return "bg-orange-500/20 text-orange-400 border-orange-500/30";
-      case "openai":
-        return "bg-green-500/20 text-green-400 border-green-500/30";
-      case "google":
-        return "bg-blue-500/20 text-blue-400 border-blue-500/30";
-      default:
-        return "bg-purple-500/20 text-purple-400 border-purple-500/30";
-    }
-  };
 
   if (!isExpanded) {
     return (

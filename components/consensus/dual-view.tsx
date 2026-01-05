@@ -3,6 +3,7 @@
 import { useRef, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ProgressionSummary } from "./progression-summary";
@@ -51,7 +52,7 @@ export function DualView({
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <span>✨</span>
+              <Sparkles className="h-5 w-5" />
               <span>Unified Consensus</span>
             </CardTitle>
             <CardDescription>
