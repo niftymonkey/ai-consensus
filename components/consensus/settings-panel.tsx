@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -110,8 +110,8 @@ export function SettingsPanel({
     }
   }, [hasLoadedPreferences]);
 
-  // Save preferences
-  const savePreferences = () => {
+  // Save preferences to localStorage
+  const savePreferences = useCallback(() => {
     try {
       const prefs: ConsensusPreferences = {
         models: selectedModels.map(m => ({
@@ -127,12 +127,34 @@ export function SettingsPanel({
       };
 
       localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-      setIsExpanded(false);
     } catch (error) {
       console.error("Failed to save consensus preferences:", error);
-      alert("Failed to save preferences");
     }
-  };
+  }, [selectedModels, maxRounds, consensusThreshold, evaluatorModel, enableSearch]);
+
+  // Auto-save preferences when settings change (debounced)
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // Don't auto-save until initial preferences have been loaded
+    if (!hasLoadedPreferences) return;
+
+    // Clear any pending save
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Debounce save by 300ms
+    saveTimeoutRef.current = setTimeout(() => {
+      savePreferences();
+    }, 300);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [selectedModels, maxRounds, consensusThreshold, evaluatorModel, enableSearch, hasLoadedPreferences, savePreferences]);
 
   // Generate summary text for collapsed state
   const getSummary = () => {
@@ -230,15 +252,6 @@ export function SettingsPanel({
             onCheckedChange={setEnableSearch}
             disabled={disabled || !availableKeys.tavily}
           />
-        </div>
-
-        <div className="flex justify-end">
-          <Button
-            onClick={savePreferences}
-            disabled={disabled || selectedModels.length < 2}
-          >
-            Use These Settings
-          </Button>
         </div>
       </CardContent>
     </Card>
