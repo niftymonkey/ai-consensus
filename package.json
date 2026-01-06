@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "db:setup": "tsx scripts/db-setup.ts",
     "migrate": "tsx scripts/migrate.ts",
     "security": "pnpm security:code && pnpm security:secrets",
@@ -63,6 +65,7 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
   }
 }
