@@ -16,7 +16,9 @@ type Provider = "openrouter" | "anthropic" | "openai" | "google";
  */
 const PROVIDER_ENDPOINTS: Record<Provider, { url: string; getHeaders: (key: string) => Record<string, string> }> = {
   openrouter: {
-    url: "https://openrouter.ai/api/v1/models",
+    // Use /credits endpoint which requires valid auth (returns 401 for invalid keys)
+    // See: https://openrouter.ai/docs/api/api-reference/credits/get-credits
+    url: "https://openrouter.ai/api/v1/credits",
     getHeaders: (key) => ({
       Authorization: `Bearer ${key}`,
     }),

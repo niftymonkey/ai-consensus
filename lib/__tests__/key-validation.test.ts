@@ -62,12 +62,12 @@ describe("validateApiKey", () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: () => Promise.resolve({ data: [] }),
+        json: () => Promise.resolve({ data: { total_credits: 10, total_usage: 0 } }),
       });
 
       await validateApiKey("openrouter", "sk-or-test");
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://openrouter.ai/api/v1/models",
+        "https://openrouter.ai/api/v1/credits",
         expect.objectContaining({
           headers: expect.objectContaining({
             Authorization: "Bearer sk-or-test",

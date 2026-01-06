@@ -66,7 +66,8 @@ export default function SettingsPage() {
       });
 
       if (!response.ok) {
-        return { success: false, error: `Failed to save ${provider} key` };
+        const data = await response.json().catch(() => ({}));
+        return { success: false, error: data.error || `Failed to save ${provider} key` };
       }
 
       // Refresh keys to get updated masked value

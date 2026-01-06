@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getApiKeys, upsertApiKey, deleteApiKey, Provider } from "@/lib/db";
+import { validateApiKey } from "@/lib/key-validation";
 
 /**
  * GET /api/keys - Get user's API keys (masked for security)
@@ -68,6 +69,17 @@ export async function POST(request: NextRequest) {
         { error: "Invalid API key format" },
         { status: 400 }
       );
+    }
+
+    // Validate the API key by making a test request (skip for tavily - no test endpoint)
+    if (provider !== "tavily") {
+      const validation = await validateApiKey(provider, apiKey.trim());
+      if (!validation.valid) {
+        return NextResponse.json(
+          { error: validation.error || "Invalid API key" },
+          { status: 400 }
+        );
+      }
     }
 
     await upsertApiKey(session.user.id, provider, apiKey.trim());
