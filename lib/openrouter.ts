@@ -11,74 +11,6 @@ export function createOpenRouterProvider(apiKey: string) {
 }
 
 /**
- * Mapping from our internal model IDs to OpenRouter model IDs
- * OpenRouter uses format: provider/model-name
- */
-export const MODEL_ID_TO_OPENROUTER: Record<string, string> = {
-  // Anthropic models
-  "claude-3-5-haiku-20241022": "anthropic/claude-3.5-haiku",
-  "claude-3-5-haiku-latest": "anthropic/claude-3.5-haiku",
-  "claude-3-7-sonnet-20250219": "anthropic/claude-3.7-sonnet",
-  "claude-3-7-sonnet-latest": "anthropic/claude-3.7-sonnet",
-  "claude-haiku-4-5-20251001": "anthropic/claude-haiku-4.5",
-  "claude-haiku-4-5": "anthropic/claude-haiku-4.5",
-  "claude-opus-4-0": "anthropic/claude-opus-4",
-  "claude-opus-4-5-20251101": "anthropic/claude-opus-4.5",
-  "claude-opus-4-5": "anthropic/claude-opus-4.5",
-  "claude-sonnet-4-0": "anthropic/claude-sonnet-4",
-  "claude-sonnet-4-5-20250929": "anthropic/claude-sonnet-4.5",
-  "claude-sonnet-4-5": "anthropic/claude-sonnet-4.5",
-
-  // OpenAI models
-  "gpt-5": "openai/gpt-5",
-  "gpt-5-mini": "openai/gpt-5-mini",
-  "gpt-5-nano": "openai/gpt-5-nano",
-  "gpt-5.1": "openai/gpt-5.1",
-  "gpt-4.1": "openai/gpt-4.1",
-  "gpt-4.1-mini": "openai/gpt-4.1-mini",
-  "gpt-4.1-nano": "openai/gpt-4.1-nano",
-  "gpt-4o": "openai/gpt-4o",
-  "gpt-4o-2024-11-20": "openai/gpt-4o-2024-11-20",
-  "gpt-4o-mini": "openai/gpt-4o-mini",
-  "chatgpt-4o-latest": "openai/chatgpt-4o-latest",
-  "gpt-4-turbo": "openai/gpt-4-turbo",
-  "o1": "openai/o1",
-  "o3-mini": "openai/o3-mini",
-
-  // Google models
-  "gemini-2.5-flash-lite": "google/gemini-2.5-flash-lite",
-  "gemini-2.5-flash": "google/gemini-2.5-flash",
-  "gemini-2.5-pro": "google/gemini-2.5-pro",
-  "gemini-1.5-flash": "google/gemini-flash-1.5",
-  "gemini-1.5-flash-8b": "google/gemini-flash-1.5-8b",
-  "gemini-1.5-pro": "google/gemini-pro-1.5",
-  "gemini-3-pro-preview": "google/gemini-3-pro-preview",
-};
-
-/**
- * Get the OpenRouter model ID for a given internal model ID
- */
-export function getOpenRouterModelId(internalId: string): string | null {
-  return MODEL_ID_TO_OPENROUTER[internalId] || null;
-}
-
-/**
- * Determine which provider "owns" a model based on its ID
- */
-export function getModelProvider(modelId: string): "anthropic" | "openai" | "google" | null {
-  if (modelId.startsWith("claude") || modelId.includes("anthropic")) {
-    return "anthropic";
-  }
-  if (modelId.startsWith("gpt") || modelId.startsWith("chatgpt") || modelId.startsWith("o1") || modelId.startsWith("o3") || modelId.startsWith("o4")) {
-    return "openai";
-  }
-  if (modelId.startsWith("gemini")) {
-    return "google";
-  }
-  return null;
-}
-
-/**
  * Error types for OpenRouter/AI SDK errors
  * (Re-exported from consensus-events for convenience)
  */
@@ -152,34 +84,4 @@ export function parseAIError(error: unknown): ParsedAIError {
   }
 
   return result;
-}
-
-/**
- * Check if OpenRouter API key is valid by making a test request
- */
-export async function checkOpenRouterAvailability(apiKey: string): Promise<{
-  available: boolean;
-  error?: string;
-}> {
-  try {
-    const response = await fetch("https://openrouter.ai/api/v1/models", {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
-    });
-
-    if (!response.ok) {
-      return {
-        available: false,
-        error: `API returned ${response.status}`,
-      };
-    }
-
-    return { available: true };
-  } catch (error) {
-    return {
-      available: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
-  }
 }

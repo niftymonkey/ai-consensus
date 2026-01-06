@@ -1,8 +1,8 @@
-interface ChatHeaderProps {
+interface ConsensusHeaderProps {
   keyCount: number;
 }
 
-export function ChatHeader({ keyCount }: ChatHeaderProps) {
+export function ConsensusHeader({ keyCount }: ConsensusHeaderProps) {
   return (
     <div className="text-center">
       <p className="text-muted-foreground">
