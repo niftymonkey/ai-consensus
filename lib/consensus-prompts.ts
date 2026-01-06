@@ -206,7 +206,8 @@ SCORING RULES:
 Consensus threshold: ${consensusThreshold}%
 Set isGoodEnough = true if score >= ${consensusThreshold}${searchGuidance}
 
-OUTPUT FORMAT (must be valid JSON):
+OUTPUT FORMAT:
+Return ONLY raw JSON - no markdown, no code fences, no \`\`\`json wrapper. Just the JSON object:
 {
   "score": <number 0-100>,
   "summary": "<1-2 conversational sentences>",

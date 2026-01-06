@@ -15,7 +15,8 @@ import {
 } from "@/lib/consensus-db";
 import { searchTavily } from "@/lib/tavily";
 import { generateSearchQuery, shouldSearchWeb } from "@/lib/search-query-generator";
-import { createOpenRouterProvider, getOpenRouterModelId, getModelProvider, parseAIError } from "@/lib/openrouter";
+import { createOpenRouterProvider, parseAIError } from "@/lib/openrouter";
+import { getRouteForModel, extractProvider, type KeySet } from "@/lib/model-routing";
 import { sendEvent, type ConsensusEvent } from "@/lib/consensus-events";
 import { z } from "zod";
 
@@ -111,45 +112,45 @@ export async function POST(request: NextRequest) {
       ? createOpenRouterProvider(keys.openrouter)
       : null;
 
-    // Direct providers we support with API keys
-    const directProviders = ["anthropic", "openai", "google"] as const;
-    type DirectProvider = typeof directProviders[number];
+    // Build KeySet for routing decisions
+    const keySet: KeySet = {
+      anthropic: keys.anthropic,
+      openai: keys.openai,
+      google: keys.google,
+      openrouter: keys.openrouter,
+    };
 
-    // Helper to get provider and model for a given selection
-    // Priority: Direct key > OpenRouter (for supported providers)
-    // Non-direct providers (meta-llama, mistral, etc.) always use OpenRouter
-    const getProviderForModel = (modelId: string, provider: string) => {
-      // Check if this is a direct provider we support
-      const isDirectProvider = directProviders.includes(provider as DirectProvider);
+    // Helper to get provider instance and model ID for a given selection
+    // Uses the new routing logic: direct key priority, OpenRouter fallback
+    const getProviderForModel = (modelId: string) => {
+      const route = getRouteForModel(modelId, keySet);
+      if (!route) return null;
 
-      // If direct provider and we have the key, use it
-      if (isDirectProvider && providerInstances[provider as DirectProvider]) {
+      if (route.source === "direct") {
+        const instance = providerInstances[route.provider as keyof typeof providerInstances];
+        if (!instance) return null;
         return {
-          instance: providerInstances[provider as DirectProvider],
-          modelId: modelId,
+          instance,
+          modelId: route.modelId,
           source: "direct" as const,
         };
       }
 
-      // Use OpenRouter for everything else (non-direct providers or missing direct keys)
+      // OpenRouter route
       if (openrouterInstance) {
-        // For OpenRouter, the modelId should already be in OpenRouter format (e.g., "meta-llama/llama-4-scout")
-        // or we can try to map it
-        const openrouterModelId = isDirectProvider ? getOpenRouterModelId(modelId) : modelId;
-        if (openrouterModelId) {
-          return {
-            instance: openrouterInstance,
-            modelId: openrouterModelId,
-            source: "openrouter" as const,
-          };
-        }
+        return {
+          instance: openrouterInstance,
+          modelId: route.modelId,
+          source: "openrouter" as const,
+        };
       }
+
       return null;
     };
 
     // Validate all selected models have API keys (direct or via OpenRouter)
     for (const model of models) {
-      const providerInfo = getProviderForModel(model.modelId, model.provider);
+      const providerInfo = getProviderForModel(model.modelId);
       if (!providerInfo) {
         return new Response(
           JSON.stringify({
@@ -163,24 +164,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Determine evaluator provider based on selected model
-    // The evaluatorModel could be a direct model ID or an OpenRouter model ID
-    const getEvaluatorProvider = (modelId: string): string => {
-      // Check for OpenRouter format (contains "/")
-      if (modelId.includes("/")) {
-        return modelId.split("/")[0]; // e.g., "anthropic/claude-3.5-sonnet" -> "anthropic"
-      }
-      // Legacy direct model ID format
-      if (modelId.startsWith("claude")) return "anthropic";
-      if (modelId.startsWith("gemini")) return "google";
-      if (modelId.startsWith("gpt") || modelId.startsWith("chatgpt") || modelId.startsWith("o1") || modelId.startsWith("o3") || modelId.startsWith("o4")) return "openai";
-      return "unknown";
-    };
-
-    const evaluatorProvider = getEvaluatorProvider(evaluatorModel);
+    // Determine evaluator provider using the new routing logic
+    const evaluatorProvider = extractProvider(evaluatorModel) || "unknown";
 
     // Check if evaluator can be called (direct key or OpenRouter)
-    const evaluatorProviderInfo = getProviderForModel(evaluatorModel, evaluatorProvider);
+    const evaluatorProviderInfo = getProviderForModel(evaluatorModel);
     if (!evaluatorProviderInfo) {
       return new Response(
         JSON.stringify({
@@ -843,8 +831,10 @@ async function streamFinalSynthesis(opts: {
   evaluatorModel: string;
   onChunk: (chunk: string) => void;
 }): Promise<void> {
-  // Use evaluator provider for synthesis
-  // If model ID contains "/", it's an OpenRouter model - use OpenRouter regardless of direct provider
+  // Determine provider for synthesis using same priority as main routing:
+  // 1. If model ID is OpenRouter format (has "/"), use OpenRouter
+  // 2. If direct provider instance available, use direct
+  // 3. Fallback to OpenRouter with constructed model ID
   const isOpenRouterModel = opts.evaluatorModel.includes("/");
   let thinkingProvider;
   let thinkingModel = opts.evaluatorModel;
@@ -855,16 +845,16 @@ async function streamFinalSynthesis(opts: {
     thinkingProvider = opts.openrouterInstance;
     useOpenRouter = true;
   } else if (opts.providerInstances[opts.evaluatorProvider]) {
-    // Direct provider model
+    // Direct provider model with available key
     thinkingProvider = opts.providerInstances[opts.evaluatorProvider];
   } else if (opts.openrouterInstance) {
-    // Fallback to OpenRouter
+    // Fallback to OpenRouter - construct OpenRouter format if needed
     thinkingProvider = opts.openrouterInstance;
-    const openrouterModelId = getOpenRouterModelId(opts.evaluatorModel);
-    if (openrouterModelId) {
-      thinkingModel = openrouterModelId;
-      useOpenRouter = true;
-    }
+    // If not already OpenRouter format, construct it: provider/model
+    thinkingModel = isOpenRouterModel
+      ? opts.evaluatorModel
+      : `${opts.evaluatorProvider}/${opts.evaluatorModel}`;
+    useOpenRouter = true;
   }
 
   // Build synthesis prompt
@@ -924,8 +914,10 @@ async function streamProgressionSummary(opts: {
   evaluatorModel: string;
   onChunk: (chunk: string) => void;
 }): Promise<void> {
-  // Use evaluator provider for progression summary
-  // If model ID contains "/", it's an OpenRouter model - use OpenRouter regardless of direct provider
+  // Determine provider for progression summary using same priority as main routing:
+  // 1. If model ID is OpenRouter format (has "/"), use OpenRouter
+  // 2. If direct provider instance available, use direct
+  // 3. Fallback to OpenRouter with constructed model ID
   const isOpenRouterModel = opts.evaluatorModel.includes("/");
   let thinkingProvider;
   let thinkingModel = opts.evaluatorModel;
@@ -936,16 +928,16 @@ async function streamProgressionSummary(opts: {
     thinkingProvider = opts.openrouterInstance;
     useOpenRouter = true;
   } else if (opts.providerInstances[opts.evaluatorProvider]) {
-    // Direct provider model
+    // Direct provider model with available key
     thinkingProvider = opts.providerInstances[opts.evaluatorProvider];
   } else if (opts.openrouterInstance) {
-    // Fallback to OpenRouter
+    // Fallback to OpenRouter - construct OpenRouter format if needed
     thinkingProvider = opts.openrouterInstance;
-    const openrouterModelId = getOpenRouterModelId(opts.evaluatorModel);
-    if (openrouterModelId) {
-      thinkingModel = openrouterModelId;
-      useOpenRouter = true;
-    }
+    // If not already OpenRouter format, construct it: provider/model
+    thinkingModel = isOpenRouterModel
+      ? opts.evaluatorModel
+      : `${opts.evaluatorProvider}/${opts.evaluatorModel}`;
+    useOpenRouter = true;
   }
 
   // Maximum length for response excerpts in progression summary

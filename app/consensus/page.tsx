@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ChatHeader } from "@/components/chat/chat-header";
-import { ChatInput } from "@/components/chat/chat-input";
-import { NoKeysAlert } from "@/components/chat/no-keys-alert";
+import { ConsensusHeader } from "@/components/consensus/consensus-header";
+import { ConsensusInput } from "@/components/consensus/consensus-input";
+import { NoKeysAlert } from "@/components/consensus/no-keys-alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SettingsPanel } from "@/components/consensus/settings-panel";
 import { RoundsPanel } from "@/components/consensus/rounds-panel";
@@ -633,7 +633,7 @@ export default function ConsensusPage() {
     return (
       <div className="container py-12">
         <div className="space-y-6">
-          <ChatHeader keyCount={keyCount} />
+          <ConsensusHeader keyCount={keyCount} />
           <NoKeysAlert />
         </div>
       </div>
@@ -668,7 +668,7 @@ export default function ConsensusPage() {
 
         {/* Input */}
         <div className="mx-auto w-full max-w-4xl">
-          <ChatInput
+          <ConsensusInput
             prompt={prompt}
             setPrompt={setPrompt}
             isLoading={isProcessing || isSynthesizing || isGeneratingProgression}

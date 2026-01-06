@@ -1,7 +1,7 @@
-import { useMemo, useState, useEffect } from "react";
-import { useAvailableModels } from "./use-available-models";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { useOpenRouterModels } from "./use-openrouter-models";
 import type { OpenRouterModelWithMeta } from "@/lib/openrouter-models";
+import { canAccessModel, type KeySet } from "@/lib/model-routing";
 
 interface HasKeys {
   anthropic: boolean;
@@ -28,18 +28,14 @@ interface UseModelsReturn {
   refetch: () => Promise<void>;
 }
 
-// Providers that support direct API keys
-const DIRECT_KEY_PROVIDERS = ["anthropic", "openai", "google"];
-
 /**
  * Unified hook for fetching available models.
  *
- * Two modes:
- * - OpenRouter key: use OpenRouter catalog with OpenRouter IDs (e.g., "anthropic/claude-3-5-haiku")
- * - Direct keys only: use direct provider models with native IDs (e.g., "claude-3-5-haiku-20241022")
+ * Uses OpenRouter catalog for all model metadata.
+ * Filters based on user's configured API keys.
  */
 export function useModels(): UseModelsReturn {
-  // OpenRouter catalog
+  // OpenRouter catalog (public, always available)
   const {
     models: orCatalog,
     isLoading: catalogLoading,
@@ -47,17 +43,14 @@ export function useModels(): UseModelsReturn {
     refetch: refetchCatalog,
   } = useOpenRouterModels();
 
-  // Check which keys user has configured (also has direct provider models)
-  const {
-    models: directModels,
-    hasKeys,
-    isLoading: keysLoading,
-    error: keysError,
-    refetch: refetchKeys,
-  } = useAvailableModels();
+  // Which keys user has configured
+  const [hasKeys, setHasKeys] = useState<HasKeys | null>(null);
+  const [keysLoading, setKeysLoading] = useState(true);
+  const [keysError, setKeysError] = useState<string | null>(null);
 
   // Read hideFreeModels preference from localStorage
   const [hideFreeModels, setHideFreeModels] = useState(false);
+
   useEffect(() => {
     const saved = localStorage.getItem("hideFreeModels");
     if (saved !== null) {
@@ -65,154 +58,74 @@ export function useModels(): UseModelsReturn {
     }
   }, []);
 
+  // Fetch which keys user has
+  const fetchKeys = useCallback(async () => {
+    try {
+      setKeysLoading(true);
+      setKeysError(null);
+
+      const response = await fetch("/api/keys");
+      if (!response.ok) {
+        throw new Error(`Failed to fetch keys: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const keys = data.keys || {};
+
+      setHasKeys({
+        anthropic: !!keys.anthropic,
+        openai: !!keys.openai,
+        google: !!keys.google,
+        tavily: !!keys.tavily,
+        openrouter: !!keys.openrouter,
+      });
+    } catch (err: unknown) {
+      console.error("Error fetching keys:", err);
+      setKeysError(err instanceof Error ? err.message : "Failed to fetch keys");
+    } finally {
+      setKeysLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchKeys();
+
+    // Listen for key updates from settings page
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "apiKeysUpdated") {
+        fetchKeys();
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [fetchKeys]);
+
   const hasOpenRouter = hasKeys?.openrouter ?? false;
-  const hasAnyDirectKey =
-    hasKeys?.anthropic || hasKeys?.openai || hasKeys?.google;
+  const hasAnyDirectKey = hasKeys?.anthropic || hasKeys?.openai || hasKeys?.google;
   const hasAnyKey = hasOpenRouter || hasAnyDirectKey || false;
 
-  // Convert direct provider models to OpenRouter format for UI compatibility
-  const convertDirectModelsToORFormat = useMemo(() => {
-    if (!directModels || !hasKeys) return [];
+  // Build KeySet for filtering
+  const keySet: KeySet = useMemo(() => ({
+    anthropic: hasKeys?.anthropic ? "configured" : null,
+    openai: hasKeys?.openai ? "configured" : null,
+    google: hasKeys?.google ? "configured" : null,
+    openrouter: hasKeys?.openrouter ? "configured" : null,
+  }), [hasKeys]);
 
-    const converted: OpenRouterModelWithMeta[] = [];
-
-    // Convert Anthropic models
-    if (hasKeys.anthropic && directModels.anthropic) {
-      for (const model of directModels.anthropic) {
-        converted.push({
-          id: model.id, // Use native ID for direct providers
-          name: model.name,
-          description: model.description || model.name,
-          context_length: model.contextWindow || 0,
-          pricing: {
-            prompt: ((model.pricing?.input || 0) / 1_000_000).toFixed(6),
-            completion: ((model.pricing?.output || 0) / 1_000_000).toFixed(6),
-          },
-          architecture: {
-            modality: model.modality || 'text',
-            input_modalities: model.modality?.includes('image') ? ['text', 'image'] : ['text'],
-            output_modalities: ['text'],
-          },
-          top_provider: {
-            context_length: model.contextWindow || 0,
-            max_completion_tokens: null,
-            is_moderated: false,
-          },
-          supported_parameters: [],
-          provider: 'anthropic',
-          shortName: model.name,
-          costPerMillionInput: model.pricing?.input || 0,
-          costPerMillionOutput: model.pricing?.output || 0,
-          isFree: (model.pricing?.input || 0) === 0 && (model.pricing?.output || 0) === 0,
-          supportsTools: true,
-          isTextOnly: !model.modality?.includes('image'),
-        });
-      }
-    }
-
-    // Convert OpenAI models
-    if (hasKeys.openai && directModels.openai) {
-      for (const model of directModels.openai) {
-        converted.push({
-          id: model.id, // Use native ID
-          name: model.name,
-          description: model.description || model.name,
-          context_length: model.contextWindow || 0,
-          pricing: {
-            prompt: ((model.pricing?.input || 0) / 1_000_000).toFixed(6),
-            completion: ((model.pricing?.output || 0) / 1_000_000).toFixed(6),
-          },
-          architecture: {
-            modality: model.modality || 'text',
-            input_modalities: model.modality?.includes('image') ? ['text', 'image'] : ['text'],
-            output_modalities: ['text'],
-          },
-          top_provider: {
-            context_length: model.contextWindow || 0,
-            max_completion_tokens: null,
-            is_moderated: false,
-          },
-          supported_parameters: [],
-          provider: 'openai',
-          shortName: model.name,
-          costPerMillionInput: model.pricing?.input || 0,
-          costPerMillionOutput: model.pricing?.output || 0,
-          isFree: (model.pricing?.input || 0) === 0 && (model.pricing?.output || 0) === 0,
-          supportsTools: true,
-          isTextOnly: !model.modality?.includes('image'),
-        });
-      }
-    }
-
-    // Convert Google models
-    if (hasKeys.google && directModels.google) {
-      for (const model of directModels.google) {
-        converted.push({
-          id: model.id, // Use native ID
-          name: model.name,
-          description: model.description || model.name,
-          context_length: model.contextWindow || 0,
-          pricing: {
-            prompt: ((model.pricing?.input || 0) / 1_000_000).toFixed(6),
-            completion: ((model.pricing?.output || 0) / 1_000_000).toFixed(6),
-          },
-          architecture: {
-            modality: model.modality || 'text',
-            input_modalities: model.modality?.includes('image') ? ['text', 'image'] : ['text'],
-            output_modalities: ['text'],
-          },
-          top_provider: {
-            context_length: model.contextWindow || 0,
-            max_completion_tokens: null,
-            is_moderated: false,
-          },
-          supported_parameters: [],
-          provider: 'google',
-          shortName: model.name,
-          costPerMillionInput: model.pricing?.input || 0,
-          costPerMillionOutput: model.pricing?.output || 0,
-          isFree: (model.pricing?.input || 0) === 0 && (model.pricing?.output || 0) === 0,
-          supportsTools: true,
-          isTextOnly: !model.modality?.includes('image'),
-        });
-      }
-    }
-
-    return converted;
-  }, [directModels, hasKeys]);
-
-  // Choose which model source to use based on available keys
-  // Priority: Direct keys always win over OpenRouter for the same provider
+  // Filter models based on available keys
   const models = useMemo(() => {
-    let result: OpenRouterModelWithMeta[] = [];
+    let result = orCatalog;
 
-    if (hasAnyDirectKey) {
-      // Always include direct provider models when available
-      result = [...convertDirectModelsToORFormat];
+    // Filter out free models if setting is enabled
+    if (hideFreeModels) {
+      result = result.filter((model) => !model.id.endsWith(":free"));
     }
 
-    if (hasOpenRouter) {
-      // Add OpenRouter models, but exclude providers we already have direct keys for
-      let orModels = orCatalog;
-
-      // Filter out free models if setting is enabled
-      if (hideFreeModels) {
-        orModels = orModels.filter((model) => !model.id.endsWith(":free"));
-      }
-
-      // Filter out providers we have direct keys for (direct keys win)
-      orModels = orModels.filter((model) => {
-        if (model.provider === 'anthropic' && hasKeys?.anthropic) return false;
-        if (model.provider === 'openai' && hasKeys?.openai) return false;
-        if (model.provider === 'google' && hasKeys?.google) return false;
-        return true; // Include all other providers from OpenRouter
-      });
-
-      result = [...result, ...orModels];
-    }
+    // Filter to only models accessible with user's keys
+    result = result.filter((model) => canAccessModel(model.id, keySet));
 
     return result;
-  }, [orCatalog, convertDirectModelsToORFormat, hasOpenRouter, hasAnyDirectKey, hasKeys, hideFreeModels]);
+  }, [orCatalog, keySet, hideFreeModels]);
 
   // Group filtered models by provider
   const groupedModels = useMemo(() => {
@@ -235,7 +148,7 @@ export function useModels(): UseModelsReturn {
 
   // Combined refetch
   const refetch = async () => {
-    await Promise.all([refetchCatalog(), refetchKeys()]);
+    await Promise.all([refetchCatalog(), fetchKeys()]);
   };
 
   return {

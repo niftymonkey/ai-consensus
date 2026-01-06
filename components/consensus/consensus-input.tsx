@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { PromptSuggestions } from "@/components/consensus/prompt-suggestions";
 
-interface ChatInputProps {
+interface ConsensusInputProps {
   prompt: string;
   setPrompt: (prompt: string) => void;
   isLoading: boolean;
@@ -13,13 +13,13 @@ interface ChatInputProps {
   showSuggestions?: boolean;
 }
 
-export function ChatInput({ prompt, setPrompt, isLoading, onSubmit, onSubmitWithPrompt, showSuggestions = false }: ChatInputProps) {
+export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmitWithPrompt, showSuggestions = false }: ConsensusInputProps) {
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (!isLoading) {
-        onSubmit(e as any);
+        onSubmit(e as unknown as React.FormEvent);
       }
     }
   }

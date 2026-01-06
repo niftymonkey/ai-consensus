@@ -256,14 +256,36 @@ export function convertCuratedToOpenRouterFormat(
 }
 
 /**
- * Check if a model name suggests it's a "latest" or newer version
- * Returns a score (higher = newer/preferred)
+ * Score a model for evaluation suitability.
+ * Higher scores = better for evaluation tasks.
+ *
+ * Positive signals:
+ * - Tool support (better structured output)
+ * - Large context (32K+)
+ * - "Latest" versions
+ * - Higher version numbers
+ * - "Pro" variants
+ *
+ * Negative signals:
+ * - Dated snapshots
  */
 function getVersionScore(model: OpenRouterModelWithMeta): number {
   const name = model.shortName.toLowerCase();
   const id = model.id.toLowerCase();
 
   let score = 0;
+
+  // Positive: Tool support (better at structured JSON output)
+  if (model.supportsTools) {
+    score += 50;
+  }
+
+  // Positive: Large context (handles multiple long responses)
+  if (model.context_length >= 32000) {
+    score += 30;
+  } else if (model.context_length >= 16000) {
+    score += 15;
+  }
 
   // Strong preference for "latest" variants
   if (name.includes("latest") || id.includes("latest")) {
@@ -295,20 +317,57 @@ function getVersionScore(model: OpenRouterModelWithMeta): number {
 }
 
 /**
- * Check if a model is suitable for evaluation tasks
- * (filters out small/fast models not suitable for evaluation)
+ * Check if a model is suitable for evaluation tasks.
+ * Uses strict filtering to ensure only capable models are recommended.
+ *
+ * Negative filters (exclude):
+ * - Lightweight: haiku, mini, flash, nano, lite, tiny, small
+ * - Code-specialized: code, coder, codex
+ * - Vision-specialized: vision, -vl, omni
+ * - Base models: "base" in name
+ * - Small context: < 8000 tokens
  */
-function isEvaluationSuitable(model: OpenRouterModelWithMeta): boolean {
+export function isEvaluationSuitable(model: OpenRouterModelWithMeta): boolean {
   const lower = model.shortName.toLowerCase();
-  return (
-    !lower.includes("nano") &&
-    !lower.includes(" mini") &&
-    !lower.includes("-mini") &&
-    !lower.includes("lite") &&
-    !lower.includes("flash") &&
-    !lower.includes("tiny") &&
-    !lower.includes("small")
-  );
+  const id = model.id.toLowerCase();
+
+  // Lightweight models - weak reasoning, JSON formatting issues
+  // Note: " mini" and "-mini" to avoid matching "gemini"
+  const isLightweight =
+    lower.includes("haiku") ||
+    lower.includes("nano") ||
+    lower.includes(" mini") ||
+    lower.includes("-mini") ||
+    lower.includes("lite") ||
+    lower.includes("flash") ||
+    lower.includes("tiny") ||
+    lower.includes("small");
+
+  // Code-specialized models - optimized for different task
+  const isCodeSpecialized =
+    lower.includes("code") ||
+    lower.includes("coder") ||
+    lower.includes("codex");
+
+  // Vision-specialized models - not text-focused
+  const isVisionSpecialized =
+    lower.includes("vision") ||
+    id.includes("-vl") ||
+    lower.includes("-vl") ||
+    lower.includes("omni");
+
+  // Base models - won't follow evaluation prompts
+  const isBaseModel = lower.includes("base");
+
+  // Small context - can't fit multiple responses
+  const hasSmallContext = model.context_length < 8000;
+
+  // Exclude if any negative filter matches
+  if (isLightweight || isCodeSpecialized || isVisionSpecialized || isBaseModel || hasSmallContext) {
+    return false;
+  }
+
+  return true;
 }
 
 /**
