@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { SettingsHeader } from "@/components/settings/settings-header";
 import { APIKeyInput } from "@/components/settings/api-key-input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -248,6 +249,17 @@ export default function SettingsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Legal Links */}
+        <div className="text-center text-sm text-muted-foreground pt-4">
+          <Link href="/terms" className="underline hover:text-foreground">
+            Terms of Service
+          </Link>
+          {" · "}
+          <Link href="/privacy" className="underline hover:text-foreground">
+            Privacy Policy
+          </Link>
+        </div>
       </div>
     </div>
   );
