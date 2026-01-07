@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Palette, Check } from "lucide-react";
 import { useTheme } from "next-themes";
+import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -35,6 +36,24 @@ export function ThemeSelector() {
   const { theme, setTheme } = useTheme();
   const { colorTheme, setColorTheme } = useColorTheme();
 
+  const handleColorThemeChange = (newTheme: string) => {
+    setColorTheme(newTheme);
+    posthog.capture("theme_changed", {
+      theme_type: "color_scheme",
+      new_theme: newTheme,
+      previous_theme: colorTheme,
+    });
+  };
+
+  const handleAppearanceChange = (newTheme: string) => {
+    setTheme(newTheme);
+    posthog.capture("theme_changed", {
+      theme_type: "appearance",
+      new_theme: newTheme,
+      previous_theme: theme,
+    });
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -48,7 +67,7 @@ export function ThemeSelector() {
         {colorThemes.map((t) => (
           <DropdownMenuItem
             key={t.value}
-            onClick={() => setColorTheme(t.value)}
+            onClick={() => handleColorThemeChange(t.value)}
           >
             <Check
               className={cn(
@@ -64,7 +83,7 @@ export function ThemeSelector() {
         {lightDarkModes.map((t) => (
           <DropdownMenuItem
             key={t.value}
-            onClick={() => setTheme(t.value)}
+            onClick={() => handleAppearanceChange(t.value)}
           >
             <Check
               className={cn(

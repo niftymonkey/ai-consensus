@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import posthog from "posthog-js";
 
 interface PromptSuggestionsProps {
   onSelect: (prompt: string) => void;
@@ -42,6 +43,12 @@ export function PromptSuggestions({ onSelect, disabled, show = true }: PromptSug
     } catch (error) {
       console.error("Failed to save used suggestions:", error);
     }
+
+    // Track prompt suggestion clicked
+    posthog.capture("prompt_suggestion_clicked", {
+      suggestion,
+      suggestion_length: suggestion.length,
+    });
 
     onSelect(suggestion);
   };

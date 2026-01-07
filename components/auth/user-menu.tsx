@@ -2,6 +2,7 @@
 
 import { signOut, useSession } from "next-auth/react";
 import Link from "next/link";
+import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -57,7 +58,11 @@ export function UserMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="text-destructive focus:text-destructive"
-          onClick={() => signOut({ callbackUrl: "/" })}
+          onClick={() => {
+            posthog.capture("sign_out_clicked");
+            posthog.reset();
+            signOut({ callbackUrl: "/" });
+          }}
         >
           Sign Out
         </DropdownMenuItem>

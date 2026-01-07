@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import Discord from "next-auth/providers/discord";
 import { sql } from "@vercel/postgres";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 /**
  * Authentication configuration using NextAuth.js v5
@@ -52,7 +53,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           SELECT id FROM users WHERE email = ${user.email}
         `;
 
-        if (existingUser.rows.length === 0) {
+        const isNewUser = existingUser.rows.length === 0;
+
+        if (isNewUser) {
           // Create new user
           await sql`
             INSERT INTO users (email, name, image)
@@ -65,6 +68,34 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             SET name = ${user.name || null}, image = ${user.image || null}
             WHERE email = ${user.email}
           `;
+        }
+
+        // Track server-side login and identify user in PostHog
+        try {
+          const posthog = getPostHogClient();
+          const provider = account?.provider || "unknown";
+
+          posthog.capture({
+            distinctId: user.email,
+            event: "server_login",
+            properties: {
+              provider,
+              is_new_user: isNewUser,
+            },
+          });
+
+          posthog.identify({
+            distinctId: user.email,
+            properties: {
+              email: user.email,
+              name: user.name,
+              provider,
+              ...(isNewUser && { created_at: new Date().toISOString() }),
+            },
+          });
+        } catch (posthogError) {
+          // Don't fail login if PostHog tracking fails
+          console.error("PostHog tracking error:", posthogError);
         }
 
         return true;

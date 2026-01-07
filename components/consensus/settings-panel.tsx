@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ChevronDown, ChevronUp, Settings as SettingsIcon } from "lucide-react";
 import Link from "next/link";
+import posthog from "posthog-js";
 import { UnifiedModelSelector } from "./unified-model-selector";
 import { ConsensusSettings } from "./consensus-settings";
 import type { ModelSelection } from "@/lib/types";
@@ -169,10 +170,32 @@ export function SettingsPanel({
     };
   }, [selectedModels, maxRounds, consensusThreshold, evaluatorModel, enableSearch, hasLoadedPreferences, savePreferences]);
 
+  const handleExpand = () => {
+    if (disabled) return;
+    setIsExpanded(true);
+    posthog.capture("settings_panel_toggled", {
+      expanded: true,
+    });
+  };
+
+  const handleCollapse = () => {
+    setIsExpanded(false);
+    posthog.capture("settings_panel_toggled", {
+      expanded: false,
+    });
+  };
+
+  const handleSearchToggle = (checked: boolean) => {
+    setEnableSearch(checked);
+    posthog.capture("web_search_toggled", {
+      enabled: checked,
+    });
+  };
+
   if (!isExpanded) {
     return (
       <button
-        onClick={() => !disabled && setIsExpanded(true)}
+        onClick={handleExpand}
         disabled={disabled}
         className="w-full text-left"
       >
@@ -216,7 +239,7 @@ export function SettingsPanel({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setIsExpanded(false)}
+            onClick={handleCollapse}
             disabled={disabled}
           >
             <ChevronUp className="h-4 w-4 mr-1" />
@@ -266,7 +289,7 @@ export function SettingsPanel({
           <Switch
             id="enable-search"
             checked={enableSearch}
-            onCheckedChange={setEnableSearch}
+            onCheckedChange={handleSearchToggle}
             disabled={disabled || !availableKeys.tavily}
           />
         </div>

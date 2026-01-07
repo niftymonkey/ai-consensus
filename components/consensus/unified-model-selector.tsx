@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { X, Plus } from "lucide-react";
 import { ModelCombobox } from "@/components/ui/model-combobox";
+import posthog from "posthog-js";
 import type { ModelSelection } from "@/lib/types";
 import type { OpenRouterModelWithMeta } from "@/lib/openrouter-models";
 
@@ -41,10 +42,26 @@ export function UnifiedModelSelector({
       label: availableModel.shortName,
     };
 
+    // Track model added
+    posthog.capture("model_added", {
+      model_id: availableModel.id,
+      provider: availableModel.provider,
+      model_count: selectedModels.length + 1,
+    });
+
     setSelectedModels([...selectedModels, newModel]);
   }
 
   function removeModel(id: string) {
+    const removedModel = selectedModels.find((m) => m.id === id);
+    if (removedModel) {
+      // Track model removed
+      posthog.capture("model_removed", {
+        model_id: removedModel.modelId,
+        provider: removedModel.provider,
+        model_count: selectedModels.length - 1,
+      });
+    }
     setSelectedModels(selectedModels.filter((m) => m.id !== id));
   }
 

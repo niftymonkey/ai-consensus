@@ -53,3 +53,7 @@ yarn-error.log*
 .env*.local
 
 .playwright-mcp/
+
+# PostHog wizard output (contains API keys and project-specific URLs)
+posthog-setup-report.md
+posthog-wizard-output.txt

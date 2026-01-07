@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import posthog from "posthog-js";
 
 /**
  * Validate callback URL to prevent open redirect attacks.
@@ -24,6 +25,11 @@ export default function SignInPage() {
   const callbackUrl = isValidCallbackUrl(rawCallbackUrl) ? rawCallbackUrl : "/";
 
   const handleSignIn = async (provider: "google" | "discord") => {
+    // Track sign-in attempt
+    posthog.capture("sign_in_clicked", {
+      provider,
+      callback_url: callbackUrl,
+    });
     await signIn(provider, { callbackUrl });
   };
 
