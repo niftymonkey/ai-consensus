@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Loader2, X } from "lucide-react";
+import posthog from "posthog-js";
 
 interface APIKeyInputProps {
   provider: string;
@@ -50,6 +51,10 @@ export function APIKeyInput({
       if (result.success) {
         setSaveStatus("saved");
         onChange(""); // Clear the input after successful save
+        // Track API key saved (conversion event for onboarding)
+        posthog.capture("api_key_saved", {
+          provider,
+        });
         // Reset saved status after 2 seconds
         setTimeout(() => setSaveStatus("idle"), 2000);
       } else {
@@ -79,7 +84,12 @@ export function APIKeyInput({
 
     try {
       const result = await onDelete();
-      if (!result.success) {
+      if (result.success) {
+        // Track API key deleted (potential churn signal)
+        posthog.capture("api_key_deleted", {
+          provider,
+        });
+      } else {
         setErrorMessage(result.error || "Failed to delete");
       }
     } catch {

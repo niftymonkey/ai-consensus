@@ -14,6 +14,7 @@ import { useAutoScroll } from "@/hooks/use-auto-scroll";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { CustomErrorToast } from "@/components/ui/custom-error-toast";
+import posthog from "posthog-js";
 import type {
   ModelSelection,
   RoundData,
@@ -212,6 +213,13 @@ export default function ConsensusPage() {
   }, [scrollTrigger, isProcessing, isSynthesizing, isGeneratingProgression, scrollToBottom]);
 
   function handleCancel() {
+    // Track consensus cancellation
+    posthog.capture("consensus_cancelled", {
+      current_round: currentRoundRef.current,
+      max_rounds: maxRounds,
+      model_count: selectedModels.length,
+    });
+
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
@@ -241,6 +249,17 @@ export default function ConsensusPage() {
     console.log('Evaluator model:', evaluatorModel);
     console.log('Max rounds:', maxRounds);
     console.log('Consensus threshold:', consensusThreshold + '%');
+
+    // Track consensus started (conversion event)
+    posthog.capture("consensus_started", {
+      model_count: selectedModels.length,
+      models: selectedModels.map(m => m.modelId),
+      evaluator_model: evaluatorModel,
+      max_rounds: maxRounds,
+      consensus_threshold: consensusThreshold,
+      search_enabled: enableSearch,
+      prompt_length: promptValue.length,
+    });
 
     setIsProcessing(true);
     setRounds([]);
@@ -348,6 +367,14 @@ export default function ConsensusPage() {
         console.log("Consensus evaluation cancelled by user");
       } else {
         console.error("Error:", error);
+        // Track consensus error
+        posthog.capture("consensus_error", {
+          error_message: error.message || "Unknown error",
+          current_round: currentRoundRef.current,
+          max_rounds: maxRounds,
+          model_count: selectedModels.length,
+        });
+        posthog.captureException(error);
         toast.error("Consensus failed", {
           description: error.message || "An error occurred. Please try again.",
           duration: 6000,
@@ -598,6 +625,16 @@ export default function ConsensusPage() {
         setIsSynthesizing(false);
         setIsGeneratingProgression(false);
         setTimeout(() => setOverallStatus(null), 2000); // Clear after 2 seconds
+
+        // Track consensus completed
+        posthog.capture("consensus_completed", {
+          total_rounds: currentRoundRef.current,
+          max_rounds: maxRounds,
+          model_count: selectedModels.length,
+          models: selectedModels.map(m => m.modelId),
+          final_score: currentEvaluationRef.current?.score,
+          consensus_threshold: consensusThreshold,
+        });
         break;
 
       case "error":

@@ -6,6 +6,21 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "2mb",
     },
   },
+  // PostHog reverse proxy configuration
+  async rewrites() {
+    return [
+      {
+        source: "/ingest/static/:path*",
+        destination: "https://us-assets.i.posthog.com/static/:path*",
+      },
+      {
+        source: "/ingest/:path*",
+        destination: "https://us.i.posthog.com/:path*",
+      },
+    ];
+  },
+  // Required for PostHog trailing slash API requests
+  skipTrailingSlashRedirect: true,
   images: {
     remotePatterns: [
       {

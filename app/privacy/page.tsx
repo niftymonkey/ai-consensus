@@ -16,7 +16,7 @@ export default function PrivacyPage() {
         <section>
           <h2 className="text-xl font-semibold mb-4">Introduction</h2>
           <p className="text-muted-foreground">
-            AI Consensus (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) respects your privacy. This Privacy Policy explains how we collect, use, and protect your information when you use our service at aiconsensus.io.
+            AI Consensus (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) respects your privacy. This Privacy Policy explains how we collect, use, and protect your information when you use our service.
           </p>
         </section>
 
@@ -41,6 +41,11 @@ export default function PrivacyPage() {
           <h3 className="text-lg font-medium mt-4 mb-2">Usage Preferences</h3>
           <p className="text-muted-foreground">
             Settings like theme preferences and model selections are stored locally in your browser (localStorage) and are not transmitted to our servers.
+          </p>
+
+          <h3 className="text-lg font-medium mt-4 mb-2">Analytics Data</h3>
+          <p className="text-muted-foreground">
+            We use PostHog for analytics to understand how the service is used. This includes page views, feature usage, and anonymous session data. No personal information or conversation content is included in analytics.
           </p>
 
           <h3 className="text-lg font-medium mt-4 mb-2">What We Do NOT Collect</h3>
@@ -72,6 +77,9 @@ export default function PrivacyPage() {
             </li>
             <li>
               <strong>Vercel</strong> - For hosting and database services.
+            </li>
+            <li>
+              <strong>PostHog</strong> - For privacy-friendly analytics and error monitoring. PostHog does not sell your data and is GDPR compliant.
             </li>
           </ul>
         </section>
