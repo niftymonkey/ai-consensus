@@ -1,41 +1,55 @@
 # AI Consensus
 
-An innovative web application where Claude, GPT-4, and Gemini collaborate to reach consensus on user questions through iterative deliberation.
+A web application that enables multiple AI models to collaborate and reach consensus on your questions through iterative deliberation.
+
+**Live Demo:** [ai-consensus.niftymonkey.dev](https://ai-consensus.niftymonkey.dev)
+
+## What It Does
+
+AI Consensus takes your question and sends it to multiple AI models simultaneously. The models then see each other's responses and refine their answers through multiple rounds until they reach agreement. An evaluator model analyzes the responses and determines when consensus is achieved.
+
+This approach helps surface more reliable, well-reasoned answers by leveraging the diverse strengths of different AI models.
 
 ## Features
 
-- 🤖 **Multi-Model Collaboration**: Watch three leading AI models work together
-- 🔄 **Iterative Consensus**: Models refine their responses until they align
-- 📊 **Real-time Visualization**: See each model's thinking process
-- 🔐 **Secure Authentication**: NextAuth.js with Google and Discord OAuth
-- 🔑 **Encrypted API Keys**: Your keys are securely encrypted and stored
-- ⚡ **Streaming Responses**: Real-time updates as models think
+- **Multi-Model Collaboration** - Claude, GPT, Gemini, and 200+ models via OpenRouter
+- **Iterative Consensus** - Models refine responses over multiple rounds until aligned
+- **Configurable Evaluator** - Choose which model evaluates consensus
+- **Real-time Streaming** - Watch responses stream in as models think
+- **OpenRouter Integration** - One API key gives access to all major models
+- **Secure Key Storage** - API keys encrypted with AES-256 at rest
+- **7 Visual Themes** - Customize the interface to your preference
+- **Self-Hostable** - Run your own instance with full control
 
-## Tech Stack
+## How It Works
 
-- **Framework**: Next.js 16 with App Router
-- **AI SDK**: Vercel AI SDK v5
-- **Models**: Anthropic Claude, OpenAI GPT-4, Google Gemini
-- **Auth**: NextAuth.js v5
-- **Database**: Vercel Postgres
-- **Styling**: Tailwind CSS
-- **Language**: TypeScript
+1. **Ask a Question** - Enter your question in the chat interface
+2. **Initial Responses** - Selected models respond simultaneously
+3. **Evaluation** - An evaluator model analyzes responses for alignment
+4. **Refinement** - If consensus isn't reached, models see each other's responses and refine
+5. **Consensus** - Once aligned (or after max rounds), a unified response is presented
 
-## Getting Started
+## Quick Start (Using the Hosted Version)
+
+1. Visit [ai-consensus.niftymonkey.dev](https://ai-consensus.niftymonkey.dev)
+2. Sign in with Google or Discord
+3. Add your OpenRouter API key in Settings (get one at [openrouter.ai/keys](https://openrouter.ai/keys))
+4. Start asking questions
+
+## Self-Hosting
 
 ### Prerequisites
 
 - Node.js 20+
-- pnpm (recommended) or npm
-- API keys for Claude, GPT-4, and Gemini
-- Google and/or Discord OAuth credentials (for auth)
-- Vercel Postgres database (or compatible PostgreSQL)
+- pnpm
+- PostgreSQL database (Vercel Postgres, Neon, Supabase, or local)
+- OAuth credentials (Google and/or Discord)
 
 ### Installation
 
 1. Clone the repository:
 ```bash
-git clone <repo-url>
+git clone https://github.com/niftymonkey/ai-consensus.git
 cd ai-consensus
 ```
 
@@ -44,102 +58,87 @@ cd ai-consensus
 pnpm install
 ```
 
-3. Copy the example environment file:
+3. Create environment file:
 ```bash
 cp .env.example .env.local
 ```
 
-4. Fill in your environment variables in `.env.local`:
-   - Generate `NEXTAUTH_SECRET`: `openssl rand -base64 32`
-   - Generate `ENCRYPTION_KEY`: `openssl rand -base64 32`
-   - Add your OAuth credentials
-   - Add your database connection string
-   - Optionally add default API keys
+4. Configure environment variables in `.env.local`:
+
+```bash
+# Required - Generate with: openssl rand -base64 32
+NEXTAUTH_SECRET=your-secret-here
+ENCRYPTION_KEY=your-encryption-key-here
+
+# Required - OAuth (at least one)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+DISCORD_CLIENT_ID=
+DISCORD_CLIENT_SECRET=
+
+# Required - PostgreSQL connection string
+POSTGRES_URL=postgresql://user:password@host:5432/database
+
+# Optional - Default API keys for testing
+OPENROUTER_API_KEY=
+```
 
 5. Set up the database:
 ```bash
 pnpm db:setup
 ```
 
-6. Run the development server:
+6. Start the development server:
 ```bash
 pnpm dev
 ```
 
-7. Open [http://localhost:3000](http://localhost:3000) in your browser
+7. Open [http://localhost:3000](http://localhost:3000)
 
-## Project Structure
+### Deploying to Vercel
 
-```
-ai-consensus/
-├── app/
-│   ├── (auth)/          # Auth-related pages
-│   │   ├── login/       # Login page
-│   │   └── settings/    # API key settings
-│   ├── api/
-│   │   ├── auth/        # NextAuth endpoints
-│   │   └── chat/        # Consensus workflow API
-│   ├── layout.tsx       # Root layout
-│   └── page.tsx         # Home page
-├── components/
-│   ├── auth/            # Auth components
-│   ├── chat/            # Chat UI components
-│   └── settings/        # Settings components
-├── lib/
-│   ├── auth.ts          # NextAuth configuration
-│   ├── consensus-workflow.ts  # Core consensus logic
-│   ├── db.ts            # Database utilities
-│   ├── encryption.ts    # Encryption utilities
-│   └── types.ts         # TypeScript types
-└── schema.sql           # Database schema
-```
-
-## How It Works
-
-1. **User Question**: You ask a question through the chat interface
-2. **Initial Responses**: All three models (Claude, GPT, Gemini) respond simultaneously
-3. **Consensus Check**: An evaluator analyzes the responses for alignment
-4. **Refinement**: If consensus isn't reached, models see each other's responses and refine
-5. **Final Response**: Once aligned (or after max rounds), a unified response is presented
-
-## Environment Variables
-
-See `.env.example` for all required environment variables.
-
-## Deployment
-
-Deploy to Vercel:
-
-```bash
-vercel
-```
-
-Make sure to:
-1. Create a Neon Postgres database in Vercel Storage
-2. Add all environment variables in Vercel dashboard
-3. Run `pnpm db:setup` locally (it uses POSTGRES_URL from your .env.local)
+1. Push your fork to GitHub
+2. Import the project in Vercel
+3. Add environment variables in Vercel dashboard
 4. Configure OAuth redirect URIs for your production domain
+5. Deploy
 
-## Development Status
+## Tech Stack
 
-🚧 **In Active Development**
+- **Framework:** Next.js 16 (App Router)
+- **AI Integration:** Vercel AI SDK v5
+- **Models:** OpenRouter, Anthropic, OpenAI, Google
+- **Auth:** NextAuth.js v5
+- **Database:** PostgreSQL (Vercel Postgres)
+- **Styling:** Tailwind CSS, Radix UI
+- **Language:** TypeScript
 
-Current phase: Consensus workflow
-- ✅ Project structure created
-- ✅ Dependencies installed
-- ✅ Placeholder pages created
-- ✅ Authentication (NextAuth.js with Google OAuth)
-- ✅ Database setup with Vercel Postgres
-- ✅ User session management
-- ✅ API key management with AES-256 encryption
-- ✅ Chat interface with parallel streaming
-- ✅ Theme system with 7 customizable themes
-- ⏳ Consensus workflow - Next up
+## API Keys
+
+Users provide their own API keys, which are encrypted and stored securely. The recommended approach is using OpenRouter, which provides access to 200+ models with a single API key.
+
+Supported providers:
+- **OpenRouter** (recommended) - Access to Claude, GPT, Gemini, Llama, Mistral, and more
+- **Anthropic** - Claude models directly
+- **OpenAI** - GPT models directly
+- **Google** - Gemini models directly
 
 ## License
 
-MIT
+This project is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE).
+
+This means:
+- You can use, modify, and distribute this software
+- If you run a modified version as a network service, you must make your source code available
+- Any derivative work must also be licensed under AGPL-3.0
+
+For commercial licensing inquiries, please open an issue.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit issues or pull requests.
+Built this for myself, decided to share it with everyone. Keeping development solo for now, but issues are open for bugs and ideas!
+
+## Support
+
+- **Issues:** [GitHub Issues](https://github.com/niftymonkey/ai-consensus/issues)
+- **Source:** [GitHub Repository](https://github.com/niftymonkey/ai-consensus)
