@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import Discord from "next-auth/providers/discord";
+import Credentials from "next-auth/providers/credentials";
 import { sql } from "@vercel/postgres";
 import { getPostHogClient } from "@/lib/posthog-server";
 
@@ -37,6 +38,32 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       clientId: process.env.DISCORD_CLIENT_ID!,
       clientSecret: process.env.DISCORD_CLIENT_SECRET!,
     }),
+    // Test-only credentials provider for E2E tests (excluded from production builds)
+    ...(process.env.NODE_ENV !== "production"
+      ? [
+          Credentials({
+            id: "credentials",
+            name: "Test Credentials",
+            credentials: {
+              email: { label: "Email", type: "email" },
+              password: { label: "Password", type: "password" },
+            },
+            async authorize(credentials) {
+              // Only allow if E2E_TEST_PASSWORD is set and matches
+              const testPassword = process.env.E2E_TEST_PASSWORD;
+              if (!testPassword || credentials?.password !== testPassword) {
+                return null;
+              }
+              // Return test user - will be created in DB by signIn callback
+              return {
+                id: "test-user",
+                email: credentials.email as string,
+                name: "Test User",
+              };
+            },
+          }),
+        ]
+      : []),
   ],
   pages: {
     signIn: "/signin",
@@ -45,6 +72,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async signIn({ user, account, profile }) {
       if (!user.email) {
         return false;
+      }
+
+      // Skip database operations for test users in E2E tests
+      // Only works in non-production AND when E2E_TEST_PASSWORD is set
+      if (
+        process.env.NODE_ENV !== "production" &&
+        process.env.E2E_TEST_PASSWORD &&
+        user.id === "test-user"
+      ) {
+        return true;
       }
 
       try {
@@ -106,6 +143,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     async session({ session, token }) {
       if (session.user && token.email) {
+        // Skip database operations in E2E tests (no POSTGRES_URL)
+        if (
+          process.env.NODE_ENV !== "production" &&
+          process.env.E2E_TEST_PASSWORD &&
+          !process.env.POSTGRES_URL
+        ) {
+          session.user.id = "test-user-id";
+          return session;
+        }
+
         try {
           // Fetch user ID from database
           let result = await sql`

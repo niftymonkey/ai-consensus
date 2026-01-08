@@ -11,6 +11,18 @@
 
 const isProduction = process.env.NODE_ENV === "production";
 
+/**
+ * Check if running in E2E test mode (no database available).
+ * Logging is suppressed in this mode to reduce noise from expected failures.
+ */
+function isE2ETestMode(): boolean {
+  return (
+    !isProduction &&
+    !!process.env.E2E_TEST_PASSWORD &&
+    !process.env.POSTGRES_URL
+  );
+}
+
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 interface LogContext {
@@ -71,6 +83,11 @@ export const logger = {
   },
 
   error(message: string, error?: Error | unknown, context?: LogContext): void {
+    // Suppress errors in E2E test mode
+    if (isE2ETestMode()) {
+      return;
+    }
+
     const errorContext: LogContext = { ...context };
 
     if (error instanceof Error) {
