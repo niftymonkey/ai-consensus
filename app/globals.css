@@ -159,8 +159,8 @@
     --sidebar-accent-foreground: oklch(0.3729 0.0306 259.7328);
     --sidebar-border: oklch(0.8717 0.0093 258.3382);
     --sidebar-ring: oklch(0.5854 0.2041 277.1173);
-    --font-sans: "Inter", sans-serif;
-    --font-mono: "JetBrains Mono", monospace;
+    --font-sans: var(--font-inter), sans-serif;
+    --font-mono: var(--font-jetbrains-mono), monospace;
   }
 
   /* Clean Slate theme - dark variant */
@@ -198,8 +198,8 @@
     --sidebar-accent-foreground: oklch(0.8717 0.0093 258.3382);
     --sidebar-border: oklch(0.4461 0.0263 256.8018);
     --sidebar-ring: oklch(0.6801 0.1583 276.9349);
-    --font-sans: "Inter", sans-serif;
-    --font-mono: "JetBrains Mono", monospace;
+    --font-sans: var(--font-inter), sans-serif;
+    --font-mono: var(--font-jetbrains-mono), monospace;
   }
 
   /* doom-64 theme - light variant */
@@ -237,8 +237,8 @@
     --sidebar-accent-foreground: oklch(1.0000 0 0);
     --sidebar-border: oklch(0.4313 0 0);
     --sidebar-ring: oklch(0.5016 0.1887 27.4816);
-    --font-sans: "Oxanium", sans-serif;
-    --font-mono: "Source Code Pro", monospace;
+    --font-sans: var(--font-oxanium), sans-serif;
+    --font-mono: var(--font-source-code-pro), monospace;
   }
 
   /* doom-64 theme - dark variant */
@@ -276,8 +276,8 @@
     --sidebar-accent-foreground: oklch(0 0 0);
     --sidebar-border: oklch(0.4091 0 0);
     --sidebar-ring: oklch(0.6083 0.2090 27.0276);
-    --font-sans: "Oxanium", sans-serif;
-    --font-mono: "Source Code Pro", monospace;
+    --font-sans: var(--font-oxanium), sans-serif;
+    --font-mono: var(--font-source-code-pro), monospace;
   }
 
   /* midnight-bloom theme - light variant */
@@ -316,8 +316,8 @@
     --sidebar-border: oklch(0.8699 0 0);
     --sidebar-ring: oklch(0.5676 0.2021 283.0838);
     --radius: 0.5rem;
-    --font-sans: "Montserrat", sans-serif;
-    --font-mono: "Source Code Pro", monospace;
+    --font-sans: var(--font-montserrat), sans-serif;
+    --font-mono: var(--font-source-code-pro), monospace;
   }
 
   /* midnight-bloom theme - dark variant */
@@ -355,8 +355,8 @@
     --sidebar-accent-foreground: oklch(0.9219 0 0);
     --sidebar-border: oklch(0.3867 0 0);
     --sidebar-ring: oklch(0.5676 0.2021 283.0838);
-    --font-sans: "Montserrat", sans-serif;
-    --font-mono: "Source Code Pro", monospace;
+    --font-sans: var(--font-montserrat), sans-serif;
+    --font-mono: var(--font-source-code-pro), monospace;
   }
 
   /* neo-brutalism theme - light variant */
@@ -394,8 +394,8 @@
     --sidebar-accent-foreground: oklch(1.0000 0 0);
     --sidebar-border: oklch(0 0 0);
     --sidebar-ring: oklch(0.6489 0.2370 26.9728);
-    --font-sans: "DM Sans", sans-serif;
-    --font-mono: "Space Mono", monospace;
+    --font-sans: var(--font-dm-sans), sans-serif;
+    --font-mono: var(--font-space-mono), monospace;
   }
 
   /* neo-brutalism theme - dark variant */
@@ -433,8 +433,8 @@
     --sidebar-accent-foreground: oklch(0 0 0);
     --sidebar-border: oklch(1.0000 0 0);
     --sidebar-ring: oklch(0.7044 0.1872 23.1858);
-    --font-sans: "DM Sans", sans-serif;
-    --font-mono: "Space Mono", monospace;
+    --font-sans: var(--font-dm-sans), sans-serif;
+    --font-mono: var(--font-space-mono), monospace;
   }
 
   /* t3-chat theme - light variant */
@@ -552,8 +552,8 @@
     --sidebar-border: oklch(0.9276 0.0058 264.5313);
     --sidebar-ring: oklch(0.6397 0.1720 36.4421);
     --radius: 0.75rem;
-    --font-sans: "Inter", sans-serif;
-    --font-mono: "JetBrains Mono", monospace;
+    --font-sans: var(--font-inter), sans-serif;
+    --font-mono: var(--font-jetbrains-mono), monospace;
   }
 
   /* tangerine theme - dark variant */
@@ -591,14 +591,17 @@
     --sidebar-accent-foreground: oklch(0.8823 0.0571 254.1284);
     --sidebar-border: oklch(0.3843 0.0301 269.7337);
     --sidebar-ring: oklch(0.6397 0.1720 36.4421);
-    --font-sans: "Inter", sans-serif;
-    --font-mono: "JetBrains Mono", monospace;
+    --font-sans: var(--font-inter), sans-serif;
+    --font-mono: var(--font-jetbrains-mono), monospace;
   }
 }
 
 @layer base {
   * {
     @apply border-border;
+  }
+  html {
+    scroll-behavior: smooth;
   }
   body {
     @apply bg-background text-foreground;

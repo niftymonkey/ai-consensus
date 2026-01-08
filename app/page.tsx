@@ -1,28 +1,27 @@
 import { auth } from "@/lib/auth";
 import { Hero } from "@/components/landing/hero";
-import { BenefitCards } from "@/components/landing/benefit-cards";
-import { CTAButtons } from "@/components/landing/cta-buttons";
+import { ProblemSolution } from "@/components/landing/problem-solution";
+import { HowItWorks } from "@/components/landing/how-it-works";
+import { Features } from "@/components/landing/features";
+import { FinalCTA } from "@/components/landing/final-cta";
+import { SectionNav } from "@/components/landing/section-nav";
+import { ScrollTracker } from "@/components/landing/scroll-tracker";
 
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
   const session = await auth();
+  const isSignedIn = !!session;
 
   return (
     <main className="flex min-h-screen flex-col">
-      <div className="flex flex-1 flex-col items-center justify-center px-4 py-8 sm:py-12 lg:py-16">
-        <div className="w-full max-w-5xl text-center">
-          <Hero />
-
-          <div className="mt-6 sm:mt-8">
-            <BenefitCards />
-          </div>
-
-          <div className="mt-8 sm:mt-12 lg:mt-16">
-            <CTAButtons isSignedIn={!!session} />
-          </div>
-        </div>
-      </div>
+      <ScrollTracker />
+      <SectionNav />
+      <Hero isSignedIn={isSignedIn} />
+      <ProblemSolution />
+      <HowItWorks />
+      <Features />
+      <FinalCTA isSignedIn={isSignedIn} />
     </main>
   );
 }

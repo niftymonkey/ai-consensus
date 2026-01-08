@@ -1,8 +1,61 @@
 import type { Metadata } from "next";
+import {
+  Inter,
+  DM_Sans,
+  Montserrat,
+  Oxanium,
+  Source_Code_Pro,
+  Space_Mono,
+  JetBrains_Mono,
+} from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { auth } from "@/lib/auth";
 import { Toaster } from "@/components/ui/sonner";
+
+// Load fonts with next/font for optimal performance (no FOUC)
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  variable: "--font-dm-sans",
+  display: "swap",
+});
+
+const montserrat = Montserrat({
+  subsets: ["latin"],
+  variable: "--font-montserrat",
+  display: "swap",
+});
+
+const oxanium = Oxanium({
+  subsets: ["latin"],
+  variable: "--font-oxanium",
+  display: "swap",
+});
+
+const sourceCodePro = Source_Code_Pro({
+  subsets: ["latin"],
+  variable: "--font-source-code-pro",
+  display: "swap",
+});
+
+const spaceMono = Space_Mono({
+  weight: ["400", "700"],
+  subsets: ["latin"],
+  variable: "--font-space-mono",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "AI Consensus - Multi-Model Collaboration",
@@ -16,7 +69,11 @@ export default async function RootLayout({
 }>) {
   const session = await auth();
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${inter.variable} ${dmSans.variable} ${montserrat.variable} ${oxanium.variable} ${sourceCodePro.variable} ${spaceMono.variable} ${jetbrainsMono.variable}`}
+    >
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -32,9 +89,6 @@ export default async function RootLayout({
             `,
           }}
         />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&family=Montserrat:wght@400;600;700&family=DM+Sans:wght@400;600;700&family=Inter:wght@400;600;700&family=Merriweather:wght@400;700&family=Source+Code+Pro:wght@400;600&family=Space+Mono:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
       </head>
       <body className="antialiased min-h-screen bg-background">
         <Providers session={session}>
