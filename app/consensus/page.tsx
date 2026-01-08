@@ -658,7 +658,7 @@ export default function ConsensusPage() {
 
   if (modelsLoading) {
     return (
-      <div className="container py-8">
+      <div className="container py-4 md:py-8 px-2 md:px-4">
         <div className="flex min-h-[400px] items-center justify-center">
           <Skeleton className="h-8 w-32" />
         </div>
@@ -668,7 +668,7 @@ export default function ConsensusPage() {
 
   if (!hasAnyKey) {
     return (
-      <div className="container py-12">
+      <div className="container py-4 md:py-12 px-2 md:px-4">
         <div className="space-y-6">
           <ConsensusHeader keyCount={keyCount} />
           <NoKeysAlert />
@@ -680,7 +680,7 @@ export default function ConsensusPage() {
   const showResults = finalConsensus !== null && finalResponses !== null;
 
   return (
-    <div className="container py-12">
+    <div className="container py-4 md:py-12 px-2 md:px-4">
       {/* Floating Status Indicator */}
       {overallStatus && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 w-full max-w-md px-4">

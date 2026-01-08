@@ -93,7 +93,7 @@ export function UnifiedModelSelector({
       <CardContent className="space-y-4">
         {selectedModels.map((model, index) => (
           <div key={model.id} className="flex items-center gap-4">
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <ModelCombobox
                 models={models}
                 groupedModels={groupedModels}

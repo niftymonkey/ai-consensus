@@ -18,11 +18,19 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import type { OpenRouterModelWithMeta } from "@/lib/openrouter-models";
 import { formatProviderName } from "@/lib/openrouter-models";
 
@@ -98,8 +106,10 @@ function computeDisplayData(model: OpenRouterModelWithMeta): ModelDisplayData {
 // Memoized model item that uses context for selection
 const ModelItem = React.memo(function ModelItem({
   data,
+  compact = false,
 }: {
   data: ModelDisplayData;
+  compact?: boolean;
 }) {
   const ctx = React.useContext(SelectionContext);
   if (!ctx) return null;
@@ -125,17 +135,34 @@ const ModelItem = React.memo(function ModelItem({
         ) : (
           <span>{data.costTier}</span>
         )}
-        <span className="opacity-50">•</span>
-        <span>{data.contextDisplay}</span>
-        {!data.isFree && (
+        {!compact && (
           <>
             <span className="opacity-50">•</span>
-            <span>{data.priceDisplay}</span>
+            <span>{data.contextDisplay}</span>
+            {!data.isFree && (
+              <>
+                <span className="opacity-50">•</span>
+                <span>{data.priceDisplay}</span>
+              </>
+            )}
           </>
         )}
       </div>
     </>
   );
+
+  // On mobile (compact mode), skip tooltip wrapper since touch doesn't support hover
+  if (compact) {
+    return (
+      <CommandItem
+        value={data.searchValue}
+        onSelect={() => ctx.onSelect(data.id)}
+        className="flex items-center justify-between py-1.5 cursor-pointer"
+      >
+        {rowContent}
+      </CommandItem>
+    );
+  }
 
   return (
     <CommandItem
@@ -165,21 +192,77 @@ const ModelItem = React.memo(function ModelItem({
 const ModelGroup = React.memo(function ModelGroup({
   heading,
   models,
+  compact = false,
 }: {
   heading: string;
   models: ModelDisplayData[];
+  compact?: boolean;
 }) {
   if (models.length === 0) return null;
 
   return (
     <CommandGroup heading={heading}>
       {models.map((data) => (
-        <ModelItem key={data.id} data={data} />
+        <ModelItem key={data.id} data={data} compact={compact} />
       ))}
     </CommandGroup>
   );
 });
 
+
+// Shared content component for both Popover and Drawer
+const ModelListContent = React.memo(function ModelListContent({
+  contextValue,
+  recommendedDisplayData,
+  providerGroups,
+  compact = false,
+}: {
+  contextValue: { selectedId: string; onSelect: (id: string) => void };
+  recommendedDisplayData: ModelDisplayData[];
+  providerGroups: Array<{
+    provider: string;
+    heading: string;
+    models: ModelDisplayData[];
+  }>;
+  compact?: boolean;
+}) {
+  const content = (
+    <SelectionContext.Provider value={contextValue}>
+      <Command>
+        <CommandInput placeholder="Search models..." />
+        <CommandList className={compact ? "max-h-[50vh]" : "max-h-[400px]"}>
+          <CommandEmpty>No model found.</CommandEmpty>
+
+          {/* Recommended section */}
+          {recommendedDisplayData.length > 0 && (
+            <ModelGroup
+              heading="Recommended"
+              models={recommendedDisplayData}
+              compact={compact}
+            />
+          )}
+
+          {/* All provider groups */}
+          {providerGroups.map(({ provider, heading, models: groupModels }) => (
+            <ModelGroup
+              key={provider}
+              heading={heading}
+              models={groupModels}
+              compact={compact}
+            />
+          ))}
+        </CommandList>
+      </Command>
+    </SelectionContext.Provider>
+  );
+
+  // On desktop, wrap with TooltipProvider for hover tooltips
+  if (!compact) {
+    return <TooltipProvider delayDuration={300}>{content}</TooltipProvider>;
+  }
+
+  return content;
+});
 
 export function ModelCombobox({
   models,
@@ -193,6 +276,7 @@ export function ModelCombobox({
   recommendedIds,
 }: ModelComboboxProps) {
   const [open, setOpen] = React.useState(false);
+  const isDesktop = useMediaQuery("(min-width: 768px)");
 
   // Stable callback for selection
   const handleSelect = React.useCallback(
@@ -276,6 +360,7 @@ export function ModelCombobox({
     });
   }, [groupedModels, recommendedIdSet, recommendedDisplayData.length, displayDataMap]);
 
+  // Loading state
   if (isLoading) {
     return (
       <Button
@@ -291,51 +376,66 @@ export function ModelCombobox({
     );
   }
 
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className={cn("w-full justify-between", className)}
-          disabled={disabled}
+  // Shared trigger button content
+  const triggerButton = (
+    <Button
+      variant="outline"
+      role="combobox"
+      aria-expanded={open}
+      className={cn("w-full justify-between", className)}
+      disabled={disabled}
+    >
+      {selectedModel ? (
+        <span className="flex items-center justify-between min-w-0 flex-1 overflow-hidden">
+          <span className="truncate">{selectedModel.shortName}</span>
+          <span className="text-xs text-muted-foreground shrink-0 ml-2 hidden md:inline">
+            {formatProviderName(selectedModel.provider)}
+          </span>
+        </span>
+      ) : (
+        placeholder
+      )}
+      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+    </Button>
+  );
+
+  // Desktop: Popover
+  if (isDesktop) {
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>{triggerButton}</PopoverTrigger>
+        <PopoverContent
+          className="w-[min(500px,calc(100vw-2rem))] p-0"
+          align="start"
         >
-          {selectedModel ? (
-            <span className="flex items-center gap-2 truncate">
-              <span className="truncate">{selectedModel.shortName}</span>
-              <span className="text-xs text-muted-foreground">
-                {formatProviderName(selectedModel.provider)}
-              </span>
-            </span>
-          ) : (
-            placeholder
-          )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[500px] p-0" align="start">
-        <SelectionContext.Provider value={contextValue}>
-          <TooltipProvider delayDuration={300}>
-            <Command>
-              <CommandInput placeholder="Search models..." />
-              <CommandList className="max-h-[400px]">
-                <CommandEmpty>No model found.</CommandEmpty>
+          <ModelListContent
+            contextValue={contextValue}
+            recommendedDisplayData={recommendedDisplayData}
+            providerGroups={providerGroups}
+            compact={false}
+          />
+        </PopoverContent>
+      </Popover>
+    );
+  }
 
-                {/* Recommended section */}
-                {recommendedDisplayData.length > 0 && (
-                  <ModelGroup heading="Recommended" models={recommendedDisplayData} />
-                )}
-
-                {/* All provider groups */}
-                {providerGroups.map(({ provider, heading, models: groupModels }) => (
-                  <ModelGroup key={provider} heading={heading} models={groupModels} />
-                ))}
-              </CommandList>
-            </Command>
-          </TooltipProvider>
-        </SelectionContext.Provider>
-      </PopoverContent>
-    </Popover>
+  // Mobile: Drawer
+  return (
+    <Drawer open={open} onOpenChange={setOpen}>
+      <DrawerTrigger asChild>{triggerButton}</DrawerTrigger>
+      <DrawerContent>
+        <DrawerHeader className="text-left">
+          <DrawerTitle>Select Model</DrawerTitle>
+        </DrawerHeader>
+        <div className="px-4 pb-4">
+          <ModelListContent
+            contextValue={contextValue}
+            recommendedDisplayData={recommendedDisplayData}
+            providerGroups={providerGroups}
+            compact={true}
+          />
+        </div>
+      </DrawerContent>
+    </Drawer>
   );
 }
