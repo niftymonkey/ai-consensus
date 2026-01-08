@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getApiKeys, upsertApiKey, deleteApiKey, Provider } from "@/lib/db";
 import { validateApiKey } from "@/lib/key-validation";
+import { logger } from "@/lib/logger";
 
 /**
  * GET /api/keys - Get user's API keys (masked for security)
@@ -11,6 +12,23 @@ export async function GET() {
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Return empty keys in E2E tests when no database is available
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.E2E_TEST_PASSWORD &&
+    !process.env.POSTGRES_URL
+  ) {
+    return NextResponse.json({
+      keys: {
+        anthropic: null,
+        openai: null,
+        google: null,
+        tavily: null,
+        openrouter: null,
+      },
+    });
   }
 
   try {
@@ -27,7 +45,7 @@ export async function GET() {
 
     return NextResponse.json({ keys: maskedKeys });
   } catch (error) {
-    console.error("Error fetching API keys:", error);
+    logger.error("Error fetching API keys", error);
     return NextResponse.json(
       { error: "Failed to fetch API keys" },
       { status: 500 }
@@ -89,7 +107,7 @@ export async function POST(request: NextRequest) {
       maskedKey: maskApiKey(apiKey),
     });
   } catch (error) {
-    console.error("Error saving API key:", error);
+    logger.error("Error saving API key", error);
     return NextResponse.json(
       { error: "Failed to save API key" },
       { status: 500 }
@@ -146,7 +164,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error deleting API key:", error);
+    logger.error("Error deleting API key", error);
     return NextResponse.json(
       { error: "Failed to delete API key" },
       { status: 500 }

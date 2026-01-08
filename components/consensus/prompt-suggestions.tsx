@@ -9,7 +9,7 @@ interface PromptSuggestionsProps {
   show?: boolean;
 }
 
-const SUGGESTIONS = [
+export const PROMPT_SUGGESTIONS = [
   "Implement debounce in TypeScript",
   "What is the meaning of life?",
   "How should we regulate AI?",
@@ -54,7 +54,7 @@ export function PromptSuggestions({ onSelect, disabled, show = true }: PromptSug
   };
 
   // Filter out used suggestions
-  const availableSuggestions = SUGGESTIONS.filter(s => !usedSuggestions.has(s));
+  const availableSuggestions = PROMPT_SUGGESTIONS.filter(s => !usedSuggestions.has(s));
 
   if (!show || availableSuggestions.length === 0) {
     return null;

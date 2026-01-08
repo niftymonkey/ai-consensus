@@ -18,6 +18,7 @@ import { generateSearchQuery, shouldSearchWeb } from "@/lib/search-query-generat
 import { createOpenRouterProvider, parseAIError } from "@/lib/openrouter";
 import { getRouteForModel, extractProvider, type KeySet } from "@/lib/model-routing";
 import { sendEvent, type ConsensusEvent } from "@/lib/consensus-events";
+import { logger } from "@/lib/logger";
 import { z } from "zod";
 
 export const maxDuration = 600; // 10 minutes for multiple rounds
@@ -581,7 +582,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error in consensus route:", error);
+    logger.error("Error in consensus route", error);
     return new Response("Internal server error", { status: 500 });
   }
 }
