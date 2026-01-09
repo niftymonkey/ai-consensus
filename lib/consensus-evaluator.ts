@@ -1,4 +1,4 @@
-import { streamObject } from "ai";
+import { streamObject, streamText } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
@@ -9,6 +9,56 @@ import {
 } from "./consensus-prompts";
 import type { ModelSelection } from "./types";
 import { createOpenRouterProvider } from "./openrouter";
+
+/**
+ * Extract JSON from messy model output that may contain preamble text,
+ * markdown code fences, or other extraneous content.
+ *
+ * This handles common issues with open-source models via OpenRouter that
+ * don't properly follow structured output instructions.
+ */
+export function extractJsonFromText(text: string): unknown | null {
+  // Try direct parse first
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Continue to extraction attempts
+  }
+
+  // Remove markdown code fences if present
+  let cleaned = text.replace(/```(?:json)?\s*/gi, '').replace(/```\s*$/gi, '');
+
+  // Try parsing the cleaned text
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    // Continue to more aggressive extraction
+  }
+
+  // Find the first { and last } to extract the JSON object
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    const jsonCandidate = cleaned.substring(firstBrace, lastBrace + 1);
+    try {
+      return JSON.parse(jsonCandidate);
+    } catch {
+      // Try fixing common issues
+    }
+
+    // Handle double opening braces like "{\n{"
+    if (jsonCandidate.startsWith('{\n{') || jsonCandidate.startsWith('{ {')) {
+      try {
+        return JSON.parse(jsonCandidate.substring(jsonCandidate.indexOf('{', 1)));
+      } catch {
+        // Give up
+      }
+    }
+  }
+
+  return null;
+}
 
 // Direct providers we support with API keys
 const DIRECT_PROVIDERS = ["anthropic", "openai", "google"] as const;
@@ -92,7 +142,57 @@ export const consensusEvaluationSchema = z.object({
 export type ConsensusEvaluation = z.infer<typeof consensusEvaluationSchema>;
 
 /**
- * Evaluate consensus using streamObject - streams partial results as they generate
+ * Fallback evaluation using streamText when streamObject fails.
+ * This handles models that don't properly support structured output.
+ */
+async function evaluateWithTextFallback(
+  responses: Map<string, string>,
+  selectedModels: ModelSelection[],
+  consensusThreshold: number,
+  evaluatorApiKey: string,
+  evaluatorProvider: string,
+  evaluatorModel: string,
+  round: number,
+  searchEnabled: boolean
+): Promise<ConsensusEvaluation> {
+  console.log(`[Evaluation Fallback] Using text generation for ${evaluatorModel}`);
+
+  const model = getModelInstance(evaluatorApiKey, evaluatorProvider, evaluatorModel);
+  const systemPrompt = buildEvaluationSystemPrompt(consensusThreshold, searchEnabled);
+  const userPrompt = buildEvaluationPrompt(responses, selectedModels, round);
+
+  const result = streamText({
+    model,
+    system: systemPrompt,
+    prompt: userPrompt,
+  });
+
+  let fullText = "";
+  for await (const chunk of result.textStream) {
+    fullText += chunk;
+  }
+
+  // Try to extract JSON from the response
+  const extracted = extractJsonFromText(fullText);
+  if (!extracted) {
+    console.error('[Evaluation Fallback] Could not extract JSON from response:', fullText.substring(0, 500));
+    throw new Error('Could not parse evaluation response as JSON');
+  }
+
+  // Validate against schema
+  const parseResult = consensusEvaluationSchema.safeParse(extracted);
+  if (!parseResult.success) {
+    console.error('[Evaluation Fallback] Schema validation failed:', parseResult.error.issues);
+    throw new Error(`Evaluation response failed validation: ${parseResult.error.issues.map(i => i.message).join(', ')}`);
+  }
+
+  console.log('[Evaluation Fallback] Successfully extracted and validated evaluation');
+  return parseResult.data;
+}
+
+/**
+ * Evaluate consensus using streamObject - streams partial results as they generate.
+ * Falls back to text generation with JSON extraction for models that don't support structured output.
  */
 export async function evaluateConsensusWithStream(
   responses: Map<string, string>,
@@ -105,9 +205,11 @@ export async function evaluateConsensusWithStream(
   onPartialUpdate?: (partial: Partial<ConsensusEvaluation>) => void,
   searchEnabled: boolean = false
 ): Promise<ConsensusEvaluation> {
+  const model = getModelInstance(evaluatorApiKey, evaluatorProvider, evaluatorModel);
+
   // streamObject returns structured data incrementally
   const result = streamObject({
-    model: getModelInstance(evaluatorApiKey, evaluatorProvider, evaluatorModel),
+    model,
     schema: consensusEvaluationSchema,
     system: buildEvaluationSystemPrompt(consensusThreshold, searchEnabled),
     prompt: buildEvaluationPrompt(responses, selectedModels, round),
@@ -148,8 +250,33 @@ export async function evaluateConsensusWithStream(
     ]);
     return finalObject;
   } catch (error) {
+    // Check if this is a JSON parsing error - if so, try the fallback
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const isParsingError = errorMessage.includes('parse') ||
+                           errorMessage.includes('JSON') ||
+                           errorMessage.includes('No object generated');
+
+    if (isParsingError) {
+      console.log('[Evaluation] streamObject failed with parsing error, trying text fallback...');
+      try {
+        return await evaluateWithTextFallback(
+          responses,
+          selectedModels,
+          consensusThreshold,
+          evaluatorApiKey,
+          evaluatorProvider,
+          evaluatorModel,
+          round,
+          searchEnabled
+        );
+      } catch (fallbackError) {
+        console.error('[Evaluation] Text fallback also failed:', fallbackError);
+        throw new Error(`Evaluation failed: Model output could not be parsed. Try using a different evaluator model (Claude, GPT-4, or Gemini recommended).`);
+      }
+    }
+
     console.error('[Evaluation] Failed to get final object:', error);
-    throw new Error(`Evaluation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(`Evaluation failed: ${errorMessage}`);
   }
 }
 
