@@ -16,7 +16,7 @@ import {
 import { searchTavily } from "@/lib/tavily";
 import { generateSearchQuery, shouldSearchWeb } from "@/lib/search-query-generator";
 import { createOpenRouterProvider, parseAIError } from "@/lib/openrouter";
-import { getRouteForModel, extractProvider, type KeySet } from "@/lib/model-routing";
+import { getRouteForModel, resolveProvider, extractDirectModelId, isDirectProviderName, type KeySet } from "@/lib/model-routing";
 import { sendEvent, type ConsensusEvent } from "@/lib/consensus-events";
 import { logger } from "@/lib/logger";
 import { z } from "zod";
@@ -132,6 +132,7 @@ export async function POST(request: NextRequest) {
         if (!instance) return null;
         return {
           instance,
+          provider: route.provider,
           modelId: route.modelId,
           source: "direct" as const,
         };
@@ -141,6 +142,7 @@ export async function POST(request: NextRequest) {
       if (openrouterInstance) {
         return {
           instance: openrouterInstance,
+          provider: route.provider,
           modelId: route.modelId,
           source: "openrouter" as const,
         };
@@ -165,11 +167,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Determine evaluator provider using the new routing logic
-    const evaluatorProvider = extractProvider(evaluatorModel) || "unknown";
-
     // Check if evaluator can be called (direct key or OpenRouter)
     const evaluatorProviderInfo = getProviderForModel(evaluatorModel);
+    // Get the provider from the routing info (more reliable than extracting from model ID)
+    const evaluatorProvider = evaluatorProviderInfo?.provider || resolveProvider(evaluatorModel) || "unknown";
     if (!evaluatorProviderInfo) {
       return new Response(
         JSON.stringify({
@@ -182,19 +183,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get the actual key for the evaluator (for functions that still need raw key)
-    // We've already validated that at least one of these exists via evaluatorProviderInfo
-    // If the model is in OpenRouter format (has "/"), always use OpenRouter key
-    // Otherwise, try direct key first, then OpenRouter
-    const isOpenRouterModel = evaluatorModel.includes("/");
-    const directKeyMap: Record<string, string | null> = {
-      anthropic: keys.anthropic,
-      openai: keys.openai,
-      google: keys.google,
-    };
-    const evaluatorKey = isOpenRouterModel
-      ? keys.openrouter!
-      : (directKeyMap[evaluatorProvider] || keys.openrouter)!;
+    // Get the actual key and model ID for the evaluator based on routing
+    // evaluatorProviderInfo tells us whether to use direct or OpenRouter
+    const evaluatorKey = evaluatorProviderInfo.source === "direct"
+      ? keys[evaluatorProviderInfo.provider as keyof typeof keys]!
+      : keys.openrouter!;
+    // Use the routed model ID (direct format for direct providers, OpenRouter format for OpenRouter)
+    const evaluatorModelId = evaluatorProviderInfo.modelId;
 
     // Create database record
     const conversationId = await createConsensusConversation(
@@ -269,7 +264,7 @@ export async function POST(request: NextRequest) {
 
               // Round 1: Check if question needs current info
               if (currentRound === 1) {
-                shouldSearch = await shouldSearchWeb(prompt, evaluatorKey, evaluatorProvider, evaluatorModel);
+                shouldSearch = await shouldSearchWeb(prompt, evaluatorKey, evaluatorProvider, evaluatorModelId);
               }
               // Subsequent rounds: Only if model requested
               else if (previousEvaluation?.needsMoreInfo && previousEvaluation?.suggestedSearchQuery) {
@@ -280,7 +275,7 @@ export async function POST(request: NextRequest) {
                 try {
                   // Determine search query
                   const searchQuery = currentRound === 1
-                    ? await generateSearchQuery(prompt, evaluatorKey, evaluatorProvider, evaluatorModel)
+                    ? await generateSearchQuery(prompt, evaluatorKey, evaluatorProvider, evaluatorModelId)
                     : previousEvaluation!.suggestedSearchQuery!;
 
                   // Stream search-start event
@@ -376,7 +371,7 @@ export async function POST(request: NextRequest) {
             // Evaluate consensus with error handling
             let evaluation;
             try {
-              console.log(`[Round ${currentRound}] Evaluating consensus with ${evaluatorProvider}:${evaluatorModel}`);
+              console.log(`[Round ${currentRound}] Evaluating consensus with ${evaluatorProvider}:${evaluatorModelId}`);
 
               evaluation = await evaluateConsensusWithStream(
                 roundResponses,
@@ -384,7 +379,7 @@ export async function POST(request: NextRequest) {
                 consensusThreshold,
                 evaluatorKey,
                 evaluatorProvider,
-                evaluatorModel,
+                evaluatorModelId,
                 currentRound,
                 (partial) => {
                   // Stream partial evaluation updates to frontend
@@ -491,7 +486,7 @@ export async function POST(request: NextRequest) {
             type: "synthesis-start",
           })) return;
 
-          console.log(`[Synthesis] Generating final consensus with ${evaluatorProvider}:${evaluatorModel}`);
+          console.log(`[Synthesis] Generating final consensus with ${evaluatorProvider}:${evaluatorModelId}`);
 
           let finalSynthesis = "";
           await streamFinalSynthesis({
@@ -501,7 +496,7 @@ export async function POST(request: NextRequest) {
             providerInstances,
             openrouterInstance,
             evaluatorProvider,
-            evaluatorModel,
+            evaluatorModel: evaluatorModelId,
             onChunk: (chunk) => {
               finalSynthesis += chunk;
               safeEnqueue({
@@ -529,7 +524,7 @@ export async function POST(request: NextRequest) {
               providerInstances,
               openrouterInstance,
               evaluatorProvider,
-              evaluatorModel,
+              evaluatorModel: evaluatorModelId,
               onChunk: (chunk) => {
                 safeEnqueue({
                   type: "progression-summary-chunk",
@@ -618,25 +613,24 @@ async function generateRoundResponses(opts: {
 
   // Helper: stream and buffer single model response with timeout
   async function streamAndBuffer(modelSelection: ModelSelection) {
-    // Direct providers we support with API keys
-    const directProviders = ["anthropic", "openai", "google"];
-    const isDirectProvider = directProviders.includes(modelSelection.provider);
-    // Check if model ID is in OpenRouter format (contains "/")
-    const isOpenRouterModel = modelSelection.modelId.includes("/");
+    // Use shared routing logic from model-routing.ts
+    const modelProvider = resolveProvider(modelSelection.modelId) || modelSelection.provider;
 
     // Determine which provider to use
-    // Use OpenRouter if: model ID is OpenRouter format OR provider isn't direct
-    // Use direct only if: provider is direct AND model ID isn't OpenRouter format AND we have the key
+    // Priority: direct key > OpenRouter
     let provider = null;
     let modelIdToUse = modelSelection.modelId;
     let source = "direct";
 
-    if (!isOpenRouterModel && isDirectProvider && opts.providerInstances[modelSelection.provider]) {
-      // Direct provider with non-OpenRouter model ID
-      provider = opts.providerInstances[modelSelection.provider];
+    // Check if we can use direct provider (even for OpenRouter format model IDs)
+    if (isDirectProviderName(modelProvider) && opts.providerInstances[modelProvider]) {
+      // Direct provider available - use it
+      provider = opts.providerInstances[modelProvider];
+      // Extract model ID without provider prefix if needed
+      modelIdToUse = extractDirectModelId(modelSelection.modelId);
       source = "direct";
     } else if (opts.openrouterInstance) {
-      // Use OpenRouter
+      // Fallback to OpenRouter
       provider = opts.openrouterInstance;
       modelIdToUse = modelSelection.modelId; // Already in OpenRouter format or will be mapped
       source = "openrouter";
@@ -829,32 +823,22 @@ async function streamFinalSynthesis(opts: {
   providerInstances: Record<string, any>;
   openrouterInstance: any;
   evaluatorProvider: string;
-  evaluatorModel: string;
+  evaluatorModel: string; // Already routed - direct format for direct, OpenRouter format for OpenRouter
   onChunk: (chunk: string) => void;
 }): Promise<void> {
-  // Determine provider for synthesis using same priority as main routing:
-  // 1. If model ID is OpenRouter format (has "/"), use OpenRouter
-  // 2. If direct provider instance available, use direct
-  // 3. Fallback to OpenRouter with constructed model ID
-  const isOpenRouterModel = opts.evaluatorModel.includes("/");
+  // Use shared routing logic from model-routing.ts
+  const modelProvider = resolveProvider(opts.evaluatorModel) || opts.evaluatorProvider;
   let thinkingProvider;
   let thinkingModel = opts.evaluatorModel;
   let useOpenRouter = false;
 
-  if (isOpenRouterModel && opts.openrouterInstance) {
-    // OpenRouter model - route through OpenRouter
-    thinkingProvider = opts.openrouterInstance;
-    useOpenRouter = true;
-  } else if (opts.providerInstances[opts.evaluatorProvider]) {
-    // Direct provider model with available key
-    thinkingProvider = opts.providerInstances[opts.evaluatorProvider];
+  if (isDirectProviderName(modelProvider) && opts.providerInstances[modelProvider]) {
+    // Direct provider available - use it
+    thinkingProvider = opts.providerInstances[modelProvider];
+    thinkingModel = extractDirectModelId(opts.evaluatorModel);
   } else if (opts.openrouterInstance) {
-    // Fallback to OpenRouter - construct OpenRouter format if needed
+    // Fallback to OpenRouter
     thinkingProvider = opts.openrouterInstance;
-    // If not already OpenRouter format, construct it: provider/model
-    thinkingModel = isOpenRouterModel
-      ? opts.evaluatorModel
-      : `${opts.evaluatorProvider}/${opts.evaluatorModel}`;
     useOpenRouter = true;
   }
 
@@ -912,32 +896,22 @@ async function streamProgressionSummary(opts: {
   providerInstances: Record<string, any>;
   openrouterInstance: any;
   evaluatorProvider: string;
-  evaluatorModel: string;
+  evaluatorModel: string; // Already routed - direct format for direct, OpenRouter format for OpenRouter
   onChunk: (chunk: string) => void;
 }): Promise<void> {
-  // Determine provider for progression summary using same priority as main routing:
-  // 1. If model ID is OpenRouter format (has "/"), use OpenRouter
-  // 2. If direct provider instance available, use direct
-  // 3. Fallback to OpenRouter with constructed model ID
-  const isOpenRouterModel = opts.evaluatorModel.includes("/");
+  // Use shared routing logic from model-routing.ts
+  const modelProvider = resolveProvider(opts.evaluatorModel) || opts.evaluatorProvider;
   let thinkingProvider;
   let thinkingModel = opts.evaluatorModel;
   let useOpenRouter = false;
 
-  if (isOpenRouterModel && opts.openrouterInstance) {
-    // OpenRouter model - route through OpenRouter
-    thinkingProvider = opts.openrouterInstance;
-    useOpenRouter = true;
-  } else if (opts.providerInstances[opts.evaluatorProvider]) {
-    // Direct provider model with available key
-    thinkingProvider = opts.providerInstances[opts.evaluatorProvider];
+  if (isDirectProviderName(modelProvider) && opts.providerInstances[modelProvider]) {
+    // Direct provider available - use it
+    thinkingProvider = opts.providerInstances[modelProvider];
+    thinkingModel = extractDirectModelId(opts.evaluatorModel);
   } else if (opts.openrouterInstance) {
-    // Fallback to OpenRouter - construct OpenRouter format if needed
+    // Fallback to OpenRouter
     thinkingProvider = opts.openrouterInstance;
-    // If not already OpenRouter format, construct it: provider/model
-    thinkingModel = isOpenRouterModel
-      ? opts.evaluatorModel
-      : `${opts.evaluatorProvider}/${opts.evaluatorModel}`;
     useOpenRouter = true;
   }
 

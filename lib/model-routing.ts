@@ -57,16 +57,18 @@ export function extractDirectModelId(modelId: string): string {
 }
 
 /**
- * Extract the provider from a model ID.
- * OpenRouter format: "provider/model-name" → returns "provider"
- * Direct format: infers from model name prefix
+ * Resolve the provider from a model ID.
+ * Handles both OpenRouter format (extracts) and direct format (infers from prefix).
+ *
+ * OpenRouter format: "provider/model-name" → extracts "provider"
+ * Direct format: infers from model name prefix (claude→anthropic, gpt→openai, etc.)
  *
  * @example
- * extractProvider("openai/gpt-4o") → "openai"
- * extractProvider("gpt-4o") → "openai"
- * extractProvider("claude-3.7-sonnet") → "anthropic"
+ * resolveProvider("openai/gpt-4o") → "openai"
+ * resolveProvider("gpt-4o") → "openai"
+ * resolveProvider("claude-3.7-sonnet") → "anthropic"
  */
-export function extractProvider(modelId: string): string | null {
+export function resolveProvider(modelId: string): string | null {
   // OpenRouter format: extract directly
   if (modelId.includes("/")) {
     return modelId.split("/")[0];
@@ -105,7 +107,7 @@ export function extractProvider(modelId: string): string | null {
  * @returns Route info or null if no route available
  */
 export function getRouteForModel(modelId: string, keys: KeySet): RouteInfo | null {
-  const provider = extractProvider(modelId);
+  const provider = resolveProvider(modelId);
 
   if (!provider) {
     return null;
@@ -148,4 +150,18 @@ export function getRouteForModel(modelId: string, keys: KeySet): RouteInfo | nul
  */
 export function canAccessModel(modelId: string, keys: KeySet): boolean {
   return getRouteForModel(modelId, keys) !== null;
+}
+
+/**
+ * Check if a provider is a direct provider (has direct API access)
+ */
+export function isDirectProviderName(provider: string): provider is DirectProvider {
+  return isDirectProvider(provider);
+}
+
+/**
+ * Get the list of direct provider names
+ */
+export function getDirectProviders(): readonly string[] {
+  return DIRECT_PROVIDERS;
 }

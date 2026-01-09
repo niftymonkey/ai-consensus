@@ -1,7 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { useOpenRouterModels } from "./use-openrouter-models";
 import type { OpenRouterModelWithMeta } from "@/lib/openrouter-models";
-import { canAccessModel, type KeySet } from "@/lib/model-routing";
 
 interface HasKeys {
   anthropic: boolean;
@@ -12,7 +10,7 @@ interface HasKeys {
 }
 
 interface UseModelsReturn {
-  /** All available models (filtered based on user's keys) */
+  /** All available models (filtered based on user's keys and provider availability) */
   models: OpenRouterModelWithMeta[];
   /** Models grouped by provider */
   groupedModels: Record<string, OpenRouterModelWithMeta[]>;
@@ -24,29 +22,25 @@ interface UseModelsReturn {
   isLoading: boolean;
   /** Any error that occurred */
   error: string | null;
-  /** Refetch both catalogs */
+  /** Refetch models */
   refetch: () => Promise<void>;
 }
 
 /**
  * Unified hook for fetching available models.
  *
- * Uses OpenRouter catalog for all model metadata.
- * Filters based on user's configured API keys.
+ * Calls /api/models/available which:
+ * 1. Gets OpenRouter catalog for model metadata
+ * 2. Filters based on which API keys the user has configured
+ * 3. For direct keys, calls provider APIs to check which models are actually available
+ *
+ * This ensures users only see models they can actually use.
  */
 export function useModels(): UseModelsReturn {
-  // OpenRouter catalog (public, always available)
-  const {
-    models: orCatalog,
-    isLoading: catalogLoading,
-    error: catalogError,
-    refetch: refetchCatalog,
-  } = useOpenRouterModels();
-
-  // Which keys user has configured
+  const [models, setModels] = useState<OpenRouterModelWithMeta[]>([]);
   const [hasKeys, setHasKeys] = useState<HasKeys | null>(null);
-  const [keysLoading, setKeysLoading] = useState(true);
-  const [keysError, setKeysError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Read hideFreeModels preference from localStorage
   const [hideFreeModels, setHideFreeModels] = useState(false);
@@ -58,80 +52,64 @@ export function useModels(): UseModelsReturn {
     }
   }, []);
 
-  // Fetch which keys user has
-  const fetchKeys = useCallback(async () => {
+  // Fetch available models from server (includes two-phase filtering)
+  const fetchModels = useCallback(async () => {
     try {
-      setKeysLoading(true);
-      setKeysError(null);
+      setIsLoading(true);
+      setError(null);
 
-      const response = await fetch("/api/keys");
+      const response = await fetch("/api/models/available");
       if (!response.ok) {
-        throw new Error(`Failed to fetch keys: ${response.status}`);
+        throw new Error(`Failed to fetch models: ${response.status}`);
       }
 
       const data = await response.json();
-      const keys = data.keys || {};
 
-      setHasKeys({
-        anthropic: !!keys.anthropic,
-        openai: !!keys.openai,
-        google: !!keys.google,
-        tavily: !!keys.tavily,
-        openrouter: !!keys.openrouter,
-      });
+      setModels(data.models || []);
+      setHasKeys(data.hasKeys || null);
+
+      // Log any provider errors for debugging (but don't fail)
+      if (data.errors && Object.keys(data.errors).length > 0) {
+        console.warn("Provider availability check errors:", data.errors);
+      }
     } catch (err: unknown) {
-      console.error("Error fetching keys:", err);
-      setKeysError(err instanceof Error ? err.message : "Failed to fetch keys");
+      console.error("Error fetching available models:", err);
+      setError(err instanceof Error ? err.message : "Failed to fetch models");
     } finally {
-      setKeysLoading(false);
+      setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchKeys();
+    fetchModels();
 
-    // Listen for key updates from settings page
+    // Listen for key updates from settings page (cross-tab)
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === "apiKeysUpdated") {
-        fetchKeys();
+        fetchModels();
       }
     };
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
-  }, [fetchKeys]);
+  }, [fetchModels]);
 
   const hasOpenRouter = hasKeys?.openrouter ?? false;
   const hasAnyDirectKey = hasKeys?.anthropic || hasKeys?.openai || hasKeys?.google;
   const hasAnyKey = hasOpenRouter || hasAnyDirectKey || false;
 
-  // Build KeySet for filtering
-  const keySet: KeySet = useMemo(() => ({
-    anthropic: hasKeys?.anthropic ? "configured" : null,
-    openai: hasKeys?.openai ? "configured" : null,
-    google: hasKeys?.google ? "configured" : null,
-    openrouter: hasKeys?.openrouter ? "configured" : null,
-  }), [hasKeys]);
-
-  // Filter models based on available keys
-  const models = useMemo(() => {
-    let result = orCatalog;
-
-    // Filter out free models if setting is enabled
-    if (hideFreeModels) {
-      result = result.filter((model) => !model.id.endsWith(":free"));
+  // Apply client-side filtering for hideFreeModels preference
+  const filteredModels = useMemo(() => {
+    if (!hideFreeModels) {
+      return models;
     }
-
-    // Filter to only models accessible with user's keys
-    result = result.filter((model) => canAccessModel(model.id, keySet));
-
-    return result;
-  }, [orCatalog, keySet, hideFreeModels]);
+    return models.filter((model) => !model.id.endsWith(":free"));
+  }, [models, hideFreeModels]);
 
   // Group filtered models by provider
   const groupedModels = useMemo(() => {
     const groups: Record<string, OpenRouterModelWithMeta[]> = {};
 
-    for (const model of models) {
+    for (const model of filteredModels) {
       if (!groups[model.provider]) {
         groups[model.provider] = [];
       }
@@ -144,20 +122,15 @@ export function useModels(): UseModelsReturn {
     }
 
     return groups;
-  }, [models]);
-
-  // Combined refetch
-  const refetch = async () => {
-    await Promise.all([refetchCatalog(), fetchKeys()]);
-  };
+  }, [filteredModels]);
 
   return {
-    models,
+    models: filteredModels,
     groupedModels,
     hasKeys,
     hasAnyKey,
-    isLoading: catalogLoading || keysLoading,
-    error: catalogError || keysError,
-    refetch,
+    isLoading,
+    error,
+    refetch: fetchModels,
   };
 }

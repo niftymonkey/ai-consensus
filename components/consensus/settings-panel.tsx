@@ -85,24 +85,33 @@ export function SettingsPanel({
     }
   }, [isProcessing, setIsExpanded]);
 
-  // Load preferences on mount
+  // Load preferences on mount (wait for models to load first)
   useEffect(() => {
     if (hasLoadedPreferences) return;
+    // Wait for models to load before restoring preferences
+    if (openRouterLoading || openRouterModels.length === 0) return;
 
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const prefs: ConsensusPreferences = JSON.parse(stored);
 
-        // Restore model selections
+        // Restore model selections (only models that are still available)
         if (prefs.models && prefs.models.length >= 2) {
-          const restoredModels: ModelSelection[] = prefs.models.map((m, idx) => ({
-            id: `model-${idx + 1}`,
-            provider: m.provider as "anthropic" | "openai" | "google",
-            modelId: m.modelId,
-            label: m.label,
-          }));
-          setSelectedModels(restoredModels);
+          // Filter to only models that exist in the current available models
+          const availableModelIds = new Set(openRouterModels.map(m => m.id));
+          const validModels = prefs.models.filter(m => availableModelIds.has(m.modelId));
+
+          // Only restore if we have at least 2 valid models
+          if (validModels.length >= 2) {
+            const restoredModels: ModelSelection[] = validModels.map((m, idx) => ({
+              id: `model-${idx + 1}`,
+              provider: m.provider,
+              modelId: m.modelId,
+              label: m.label,
+            }));
+            setSelectedModels(restoredModels);
+          }
         }
 
         // Restore other settings
@@ -126,7 +135,7 @@ export function SettingsPanel({
       console.error("Failed to load consensus preferences:", error);
       setHasLoadedPreferences(true);
     }
-  }, [hasLoadedPreferences, setIsExpanded]);
+  }, [hasLoadedPreferences, setIsExpanded, openRouterLoading, openRouterModels]);
 
   // Save preferences to localStorage
   const savePreferences = useCallback(() => {

@@ -1,14 +1,11 @@
 import { streamObject, streamText } from "ai";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAI } from "@ai-sdk/openai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
 import {
   buildEvaluationSystemPrompt,
   buildEvaluationPrompt,
 } from "./consensus-prompts";
 import type { ModelSelection } from "./types";
-import { createOpenRouterProvider } from "./openrouter";
+import { getModelInstance } from "./model-instance";
 
 /**
  * Extract JSON from messy model output that may contain preamble text,
@@ -58,34 +55,6 @@ export function extractJsonFromText(text: string): unknown | null {
   }
 
   return null;
-}
-
-// Direct providers we support with API keys
-const DIRECT_PROVIDERS = ["anthropic", "openai", "google"] as const;
-
-/**
- * Get the appropriate model instance for a provider/model combination
- * Handles both direct providers and OpenRouter
- */
-function getModelInstance(apiKey: string, provider: string, model: string) {
-  const isDirectProvider = DIRECT_PROVIDERS.includes(provider as typeof DIRECT_PROVIDERS[number]);
-  const isOpenRouterModel = model.includes("/"); // OpenRouter models have format "provider/model"
-
-  // Use OpenRouter if model is in OpenRouter format or provider isn't direct
-  if (isOpenRouterModel || !isDirectProvider) {
-    const openrouterProvider = createOpenRouterProvider(apiKey);
-    return openrouterProvider.chat(model);
-  }
-
-  // Use direct provider
-  const providerInstance =
-    provider === "anthropic"
-      ? createAnthropic({ apiKey })
-      : provider === "google"
-        ? createGoogleGenerativeAI({ apiKey })
-        : createOpenAI({ apiKey });
-
-  return providerInstance(model);
 }
 
 // Zod schema for consensus evaluation (enforces structure)
