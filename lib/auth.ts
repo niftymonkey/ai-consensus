@@ -124,11 +124,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return true;
       }
 
-      // Skip database operations for preview deployment users
-      if (isPreviewDeployment && user.id?.startsWith("preview-")) {
-        return true;
-      }
-
       try {
         // Check if user exists
         const existingUser = await sql`
@@ -195,12 +190,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           !process.env.POSTGRES_URL
         ) {
           session.user.id = "test-user-id";
-          return session;
-        }
-
-        // Skip database operations for preview deployment users
-        if (isPreviewDeployment && token.sub?.startsWith("preview-")) {
-          session.user.id = token.sub;
           return session;
         }
 
