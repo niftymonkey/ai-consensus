@@ -5,6 +5,9 @@ import Credentials from "next-auth/providers/credentials";
 import { sql } from "@vercel/postgres";
 import { getPostHogClient } from "@/lib/posthog-server";
 
+// Check if we're in a Vercel preview deployment
+const isPreviewDeployment = process.env.VERCEL_ENV === "preview";
+
 /**
  * Authentication configuration using NextAuth.js v5
  *
@@ -28,43 +31,80 @@ import { getPostHogClient } from "@/lib/posthog-server";
  *
  * Reference: https://next-auth.js.org/getting-started/rest-api#get-apiauthcsrf
  */
+// Build providers list based on environment
+const oauthProviders = [
+  Google({
+    clientId: process.env.GOOGLE_CLIENT_ID!,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+  }),
+  Discord({
+    clientId: process.env.DISCORD_CLIENT_ID!,
+    clientSecret: process.env.DISCORD_CLIENT_SECRET!,
+  }),
+];
+
+// Preview deployment credentials provider (email allowlist)
+const previewCredentialsProvider = Credentials({
+  id: "preview-credentials",
+  name: "Preview Login",
+  credentials: {
+    email: { label: "Email", type: "email" },
+  },
+  async authorize(credentials) {
+    const allowedEmails = process.env.PREVIEW_ALLOWED_EMAILS?.split(",").map(e => e.trim()) || [];
+    const email = credentials?.email as string;
+
+    if (!email || !allowedEmails.includes(email)) {
+      return null;
+    }
+
+    return {
+      id: `preview-${email}`,
+      email,
+      name: "Preview User",
+    };
+  },
+});
+
+// E2E test credentials provider (password-based, local dev only)
+const e2eCredentialsProvider = Credentials({
+  id: "credentials",
+  name: "Test Credentials",
+  credentials: {
+    email: { label: "Email", type: "email" },
+    password: { label: "Password", type: "password" },
+  },
+  async authorize(credentials) {
+    const testPassword = process.env.E2E_TEST_PASSWORD;
+    if (!testPassword || credentials?.password !== testPassword) {
+      return null;
+    }
+    return {
+      id: "test-user",
+      email: credentials.email as string,
+      name: "Test User",
+    };
+  },
+});
+
+// Determine which providers to use
+function getProviders() {
+  // Preview deployments: only use email allowlist credentials
+  if (isPreviewDeployment) {
+    return [previewCredentialsProvider];
+  }
+
+  // Local development: OAuth + E2E test credentials
+  if (process.env.NODE_ENV !== "production") {
+    return [...oauthProviders, e2eCredentialsProvider];
+  }
+
+  // Production: OAuth only
+  return oauthProviders;
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  providers: [
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-    Discord({
-      clientId: process.env.DISCORD_CLIENT_ID!,
-      clientSecret: process.env.DISCORD_CLIENT_SECRET!,
-    }),
-    // Test-only credentials provider for E2E tests (excluded from production builds)
-    ...(process.env.NODE_ENV !== "production"
-      ? [
-          Credentials({
-            id: "credentials",
-            name: "Test Credentials",
-            credentials: {
-              email: { label: "Email", type: "email" },
-              password: { label: "Password", type: "password" },
-            },
-            async authorize(credentials) {
-              // Only allow if E2E_TEST_PASSWORD is set and matches
-              const testPassword = process.env.E2E_TEST_PASSWORD;
-              if (!testPassword || credentials?.password !== testPassword) {
-                return null;
-              }
-              // Return test user - will be created in DB by signIn callback
-              return {
-                id: "test-user",
-                email: credentials.email as string,
-                name: "Test User",
-              };
-            },
-          }),
-        ]
-      : []),
-  ],
+  providers: getProviders(),
   pages: {
     signIn: "/signin",
   },
@@ -81,6 +121,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         process.env.E2E_TEST_PASSWORD &&
         user.id === "test-user"
       ) {
+        return true;
+      }
+
+      // Skip database operations for preview deployment users
+      if (isPreviewDeployment && user.id?.startsWith("preview-")) {
         return true;
       }
 
@@ -150,6 +195,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           !process.env.POSTGRES_URL
         ) {
           session.user.id = "test-user-id";
+          return session;
+        }
+
+        // Skip database operations for preview deployment users
+        if (isPreviewDeployment && token.sub?.startsWith("preview-")) {
+          session.user.id = token.sub;
           return session;
         }
 
