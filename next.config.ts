@@ -6,6 +6,23 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "2mb",
     },
   },
+  // PostHog proxy rewrites for local development
+  // Production uses vercel.json rewrites instead
+  async rewrites() {
+    if (process.env.NODE_ENV === "development") {
+      return [
+        {
+          source: "/ph/static/:path*",
+          destination: "https://us-assets.i.posthog.com/static/:path*",
+        },
+        {
+          source: "/ph/:path*",
+          destination: "https://us.i.posthog.com/:path*",
+        },
+      ];
+    }
+    return [];
+  },
   // Required for PostHog trailing slash API requests
   skipTrailingSlashRedirect: true,
   images: {
