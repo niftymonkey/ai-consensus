@@ -76,6 +76,7 @@ export function SettingsPanel({
   openRouterLoading = false,
 }: SettingsPanelProps) {
   const [hasLoadedPreferences, setHasLoadedPreferences] = useState(false);
+  const [skipNextSave, setSkipNextSave] = useState(false);
 
   // Auto-collapse when processing starts
   useEffect(() => {
@@ -115,6 +116,9 @@ export function SettingsPanel({
 
         // Collapse by default if preferences exist
         setIsExpanded(false);
+
+        // Skip the next save to prevent overwriting with stale props
+        setSkipNextSave(true);
       }
 
       setHasLoadedPreferences(true);
@@ -153,6 +157,12 @@ export function SettingsPanel({
     // Don't auto-save until initial preferences have been loaded
     if (!hasLoadedPreferences) return;
 
+    // Skip the first save after loading to prevent overwriting with stale props
+    if (skipNextSave) {
+      setSkipNextSave(false);
+      return;
+    }
+
     // Clear any pending save
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
@@ -168,7 +178,7 @@ export function SettingsPanel({
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [selectedModels, maxRounds, consensusThreshold, evaluatorModel, enableSearch, hasLoadedPreferences, savePreferences]);
+  }, [selectedModels, maxRounds, consensusThreshold, evaluatorModel, enableSearch, hasLoadedPreferences, skipNextSave, savePreferences]);
 
   const handleExpand = () => {
     if (disabled) return;
