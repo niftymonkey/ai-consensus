@@ -4,7 +4,7 @@
 
 import { ConsensusEvaluation, SearchData } from "./types";
 
-export type AIErrorType = 'rate-limit' | 'openrouter-privacy' | 'generic';
+export type AIErrorType = 'rate-limit' | 'openrouter-privacy' | 'provider_not_found' | 'generic';
 
 export interface ModelErrorData {
   modelId: string;

@@ -19,6 +19,7 @@ import { createOpenRouterProvider, parseAIError } from "@/lib/openrouter";
 import { getRouteForModel, resolveProvider, extractDirectModelId, isDirectProviderName, type KeySet } from "@/lib/model-routing";
 import { sendEvent, type ConsensusEvent } from "@/lib/consensus-events";
 import { logger } from "@/lib/logger";
+import { captureServerException } from "@/lib/posthog-server";
 import { z } from "zod";
 
 export const maxDuration = 600; // 10 minutes for multiple rounds
@@ -557,10 +558,27 @@ export async function POST(request: NextRequest) {
           });
         } catch (error: any) {
           console.error("Error in consensus workflow:", error);
+
+          // Capture to PostHog server-side with model context
+          captureServerException(
+            error instanceof Error ? error : new Error(error.message || "Unknown error"),
+            session.user.id,
+            {
+              error_type: "consensus_workflow_error",
+              current_round: currentRound,
+              max_rounds: maxRounds,
+              consensus_threshold: consensusThreshold,
+              evaluator_model: evaluatorModel,
+              selected_models: models.map(m => ({ id: m.id, modelId: m.modelId, provider: m.provider })),
+              search_enabled: enableSearch,
+            }
+          );
+
           safeEnqueue({
             type: "error",
             data: {
               message: error.message || "An error occurred",
+              round: currentRound,
             },
           });
         } finally {
@@ -578,6 +596,16 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     logger.error("Error in consensus route", error);
+
+    // Capture to PostHog server-side
+    captureServerException(
+      error instanceof Error ? error : new Error("Unknown error in consensus route"),
+      session?.user?.id || "anonymous",
+      {
+        error_type: "consensus_route_error",
+      }
+    );
+
     return new Response("Internal server error", { status: 500 });
   }
 }
@@ -637,8 +665,32 @@ async function generateRoundResponses(opts: {
     }
 
     if (!provider) {
-      console.error(`Provider not found for ${modelSelection.id}`);
-      responses.set(modelSelection.id, `[Error: Provider not configured for ${modelSelection.label}]`);
+      const errorMessage = `Provider not configured for ${modelSelection.label}. Model: ${modelSelection.modelId}, Provider: ${modelProvider}`;
+      const error = new Error(errorMessage);
+      console.error(`Provider not found for ${modelSelection.id}:`, errorMessage);
+
+      // Capture to PostHog server-side
+      captureServerException(error, "anonymous", {
+        error_type: "provider_not_found",
+        model_id: modelSelection.id,
+        model_label: modelSelection.label,
+        model_provider: modelProvider,
+        round: opts.round,
+      });
+
+      // Send error event to client
+      safeEnqueue({
+        type: "model-error",
+        data: {
+          modelId: modelSelection.id,
+          modelLabel: modelSelection.label,
+          error: errorMessage,
+          errorType: "provider_not_found",
+          round: opts.round,
+        },
+      });
+
+      responses.set(modelSelection.id, `[Error: ${errorMessage}]`);
       return;
     }
 
@@ -760,6 +812,22 @@ async function generateRoundResponses(opts: {
 
       // For the actual failed model (not ones we aborted), send error event and trigger abort
       if (!opts.signal.aborted && !wasAbortedByFailure) {
+        // Capture to PostHog server-side with full model context
+        captureServerException(
+          error instanceof Error ? error : new Error(parsedError.message),
+          "anonymous", // User ID not available in this scope
+          {
+            error_type: parsedError.type || "model_api_error",
+            model_id: modelSelection.id,
+            model_label: modelSelection.label,
+            model_provider: modelSelection.provider,
+            model_api_id: modelIdToUse,
+            source: source,
+            round: opts.round,
+            parsed_error_message: parsedError.message,
+          }
+        );
+
         // Send error event to client BEFORE we trigger abort
         safeEnqueue({
           type: "model-error",
