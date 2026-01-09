@@ -1,36 +1,5 @@
 import { generateText } from "ai";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAI } from "@ai-sdk/openai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { createOpenRouterProvider } from "./openrouter";
-
-// Direct providers we support with API keys
-const DIRECT_PROVIDERS = ["anthropic", "openai", "google"] as const;
-
-/**
- * Get the appropriate model instance for a provider/model combination
- * Handles both direct providers and OpenRouter
- */
-function getModelInstance(apiKey: string, provider: string, model: string) {
-  const isDirectProvider = DIRECT_PROVIDERS.includes(provider as typeof DIRECT_PROVIDERS[number]);
-  const isOpenRouterModel = model.includes("/"); // OpenRouter models have format "provider/model"
-
-  // Use OpenRouter if model is in OpenRouter format or provider isn't direct
-  if (isOpenRouterModel || !isDirectProvider) {
-    const openrouterProvider = createOpenRouterProvider(apiKey);
-    return openrouterProvider.chat(model);
-  }
-
-  // Use direct provider
-  const providerInstance =
-    provider === "anthropic"
-      ? createAnthropic({ apiKey })
-      : provider === "google"
-        ? createGoogleGenerativeAI({ apiKey })
-        : createOpenAI({ apiKey });
-
-  return providerInstance(model);
-}
+import { getModelInstance } from "./model-instance";
 
 /**
  * Check if a prompt requires current web information to answer well

@@ -10,7 +10,7 @@
 import { describe, it, expect } from "vitest";
 import {
   extractDirectModelId,
-  extractProvider,
+  resolveProvider,
   getRouteForModel,
   canAccessModel,
   type KeySet,
@@ -34,105 +34,105 @@ describe("extractDirectModelId", () => {
   });
 });
 
-describe("extractProvider", () => {
+describe("resolveProvider", () => {
   describe("from OpenRouter format (has slash)", () => {
     it("extracts provider from big 3", () => {
-      expect(extractProvider("openai/gpt-4o")).toBe("openai");
-      expect(extractProvider("anthropic/claude-3.7-sonnet")).toBe("anthropic");
-      expect(extractProvider("google/gemini-2.5-flash")).toBe("google");
+      expect(resolveProvider("openai/gpt-4o")).toBe("openai");
+      expect(resolveProvider("anthropic/claude-3.7-sonnet")).toBe("anthropic");
+      expect(resolveProvider("google/gemini-2.5-flash")).toBe("google");
     });
 
     it("extracts meta-llama provider", () => {
-      expect(extractProvider("meta-llama/llama-3.1-70b")).toBe("meta-llama");
-      expect(extractProvider("meta-llama/llama-4-scout")).toBe("meta-llama");
-      expect(extractProvider("meta-llama/llama-3.3-70b-instruct")).toBe("meta-llama");
+      expect(resolveProvider("meta-llama/llama-3.1-70b")).toBe("meta-llama");
+      expect(resolveProvider("meta-llama/llama-4-scout")).toBe("meta-llama");
+      expect(resolveProvider("meta-llama/llama-3.3-70b-instruct")).toBe("meta-llama");
     });
 
     it("extracts mistralai provider", () => {
-      expect(extractProvider("mistralai/mistral-large")).toBe("mistralai");
-      expect(extractProvider("mistralai/mistral-small-creative")).toBe("mistralai");
-      expect(extractProvider("mistralai/devstral-2512")).toBe("mistralai");
-      expect(extractProvider("mistralai/ministral-8b-2512")).toBe("mistralai");
+      expect(resolveProvider("mistralai/mistral-large")).toBe("mistralai");
+      expect(resolveProvider("mistralai/mistral-small-creative")).toBe("mistralai");
+      expect(resolveProvider("mistralai/devstral-2512")).toBe("mistralai");
+      expect(resolveProvider("mistralai/ministral-8b-2512")).toBe("mistralai");
     });
 
     it("extracts deepseek provider", () => {
-      expect(extractProvider("deepseek/deepseek-chat")).toBe("deepseek");
-      expect(extractProvider("deepseek/deepseek-v3.2")).toBe("deepseek");
-      expect(extractProvider("deepseek/deepseek-v3.2-speciale")).toBe("deepseek");
+      expect(resolveProvider("deepseek/deepseek-chat")).toBe("deepseek");
+      expect(resolveProvider("deepseek/deepseek-v3.2")).toBe("deepseek");
+      expect(resolveProvider("deepseek/deepseek-v3.2-speciale")).toBe("deepseek");
     });
 
     it("extracts qwen provider", () => {
-      expect(extractProvider("qwen/qwen3-vl-32b-instruct")).toBe("qwen");
-      expect(extractProvider("qwen/qwen3-vl-8b-thinking")).toBe("qwen");
+      expect(resolveProvider("qwen/qwen3-vl-32b-instruct")).toBe("qwen");
+      expect(resolveProvider("qwen/qwen3-vl-8b-thinking")).toBe("qwen");
     });
 
     it("extracts x-ai (Grok) provider", () => {
-      expect(extractProvider("x-ai/grok-4.1-fast")).toBe("x-ai");
-      expect(extractProvider("x-ai/grok-2")).toBe("x-ai");
+      expect(resolveProvider("x-ai/grok-4.1-fast")).toBe("x-ai");
+      expect(resolveProvider("x-ai/grok-2")).toBe("x-ai");
     });
 
     it("extracts z-ai (GLM) provider", () => {
-      expect(extractProvider("z-ai/glm-4.7")).toBe("z-ai");
-      expect(extractProvider("z-ai/glm-4.6v")).toBe("z-ai");
+      expect(resolveProvider("z-ai/glm-4.7")).toBe("z-ai");
+      expect(resolveProvider("z-ai/glm-4.6v")).toBe("z-ai");
     });
 
     it("extracts cohere provider", () => {
-      expect(extractProvider("cohere/command-r-plus")).toBe("cohere");
-      expect(extractProvider("cohere/command-r7b-12-2024")).toBe("cohere");
+      expect(resolveProvider("cohere/command-r-plus")).toBe("cohere");
+      expect(resolveProvider("cohere/command-r7b-12-2024")).toBe("cohere");
     });
 
     it("extracts perplexity provider", () => {
-      expect(extractProvider("perplexity/sonar-pro-search")).toBe("perplexity");
+      expect(resolveProvider("perplexity/sonar-pro-search")).toBe("perplexity");
     });
 
     it("extracts nvidia provider", () => {
-      expect(extractProvider("nvidia/llama-3.1-nemotron-70b-instruct")).toBe("nvidia");
+      expect(resolveProvider("nvidia/llama-3.1-nemotron-70b-instruct")).toBe("nvidia");
     });
 
     it("extracts amazon provider", () => {
-      expect(extractProvider("amazon/nova-pro-v1")).toBe("amazon");
+      expect(resolveProvider("amazon/nova-pro-v1")).toBe("amazon");
     });
 
     it("handles models with :free suffix", () => {
-      expect(extractProvider("mistralai/devstral-2512:free")).toBe("mistralai");
-      expect(extractProvider("nex-agi/deepseek-v3.1-nex-n1:free")).toBe("nex-agi");
+      expect(resolveProvider("mistralai/devstral-2512:free")).toBe("mistralai");
+      expect(resolveProvider("nex-agi/deepseek-v3.1-nex-n1:free")).toBe("nex-agi");
     });
 
     it("handles unusual provider names", () => {
-      expect(extractProvider("nousresearch/hermes-3-llama-3.1-405b")).toBe("nousresearch");
-      expect(extractProvider("sao10k/l3.3-euryale-70b")).toBe("sao10k");
-      expect(extractProvider("thedrummer/rocinante-12b")).toBe("thedrummer");
+      expect(resolveProvider("nousresearch/hermes-3-llama-3.1-405b")).toBe("nousresearch");
+      expect(resolveProvider("sao10k/l3.3-euryale-70b")).toBe("sao10k");
+      expect(resolveProvider("thedrummer/rocinante-12b")).toBe("thedrummer");
     });
   });
 
   describe("from direct format (no slash) - infers provider", () => {
     it("infers anthropic from claude prefix", () => {
-      expect(extractProvider("claude-3.7-sonnet")).toBe("anthropic");
-      expect(extractProvider("claude-3-5-haiku-20241022")).toBe("anthropic");
-      expect(extractProvider("claude-opus-4-5")).toBe("anthropic");
+      expect(resolveProvider("claude-3.7-sonnet")).toBe("anthropic");
+      expect(resolveProvider("claude-3-5-haiku-20241022")).toBe("anthropic");
+      expect(resolveProvider("claude-opus-4-5")).toBe("anthropic");
     });
 
     it("infers openai from gpt/chatgpt/o-series prefix", () => {
-      expect(extractProvider("gpt-4o")).toBe("openai");
-      expect(extractProvider("gpt-4-turbo")).toBe("openai");
-      expect(extractProvider("gpt-5")).toBe("openai");
-      expect(extractProvider("chatgpt-4o-latest")).toBe("openai");
-      expect(extractProvider("o1")).toBe("openai");
-      expect(extractProvider("o3-mini")).toBe("openai");
-      expect(extractProvider("o4-mini")).toBe("openai");
+      expect(resolveProvider("gpt-4o")).toBe("openai");
+      expect(resolveProvider("gpt-4-turbo")).toBe("openai");
+      expect(resolveProvider("gpt-5")).toBe("openai");
+      expect(resolveProvider("chatgpt-4o-latest")).toBe("openai");
+      expect(resolveProvider("o1")).toBe("openai");
+      expect(resolveProvider("o3-mini")).toBe("openai");
+      expect(resolveProvider("o4-mini")).toBe("openai");
     });
 
     it("infers google from gemini prefix", () => {
-      expect(extractProvider("gemini-2.5-flash")).toBe("google");
-      expect(extractProvider("gemini-1.5-pro")).toBe("google");
-      expect(extractProvider("gemini-3-pro-preview")).toBe("google");
+      expect(resolveProvider("gemini-2.5-flash")).toBe("google");
+      expect(resolveProvider("gemini-1.5-pro")).toBe("google");
+      expect(resolveProvider("gemini-3-pro-preview")).toBe("google");
     });
 
     it("returns null for unknown direct format models", () => {
       // These would need OpenRouter format to identify provider
-      expect(extractProvider("some-unknown-model")).toBeNull();
-      expect(extractProvider("llama-3.1-70b")).toBeNull(); // needs meta-llama/ prefix
-      expect(extractProvider("mistral-large")).toBeNull(); // needs mistralai/ prefix
+      expect(resolveProvider("some-unknown-model")).toBeNull();
+      expect(resolveProvider("llama-3.1-70b")).toBeNull(); // needs meta-llama/ prefix
+      expect(resolveProvider("mistral-large")).toBeNull(); // needs mistralai/ prefix
     });
   });
 });

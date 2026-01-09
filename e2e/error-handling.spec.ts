@@ -29,6 +29,11 @@ test.describe("Error Handling", () => {
         await route.abort("failed");
       });
 
+      // Mock available models endpoint to fail (since it requires auth/db)
+      await page.route("**/api/models/available", async (route) => {
+        await route.abort("failed");
+      });
+
       await page.goto("/consensus");
 
       // Page should still be on consensus URL (not crashed/redirected)
@@ -50,7 +55,16 @@ test.describe("Error Handling", () => {
         });
       });
 
-      // Mock models endpoint to fail
+      // Mock models endpoint to fail (this is what useModels hook calls)
+      await page.route("**/api/models/available", async (route) => {
+        await route.fulfill({
+          status: 500,
+          contentType: "application/json",
+          body: JSON.stringify({ error: "Internal server error" }),
+        });
+      });
+
+      // Keep legacy endpoint mock for backwards compatibility
       await page.route("**/api/openrouter-models", async (route) => {
         await route.fulfill({
           status: 500,
@@ -64,8 +78,9 @@ test.describe("Error Handling", () => {
       // Page should still load (doesn't crash)
       await expect(page).toHaveURL("/consensus");
 
-      // The input area should still be visible even if models fail to load
-      await expect(page.getByPlaceholder(/What would you like/i)).toBeVisible();
+      // When models API fails, hasKeys is unknown, so NoKeysAlert is shown
+      // This is graceful degradation - page doesn't crash, shows actionable UI
+      await expect(page.getByText("No API Keys Configured")).toBeVisible();
     });
   });
 
@@ -78,6 +93,27 @@ test.describe("Error Handling", () => {
           contentType: "application/json",
           body: JSON.stringify({
             keys: { ...testData.maskedKeys, openrouter: "sk-or-...1234" },
+          }),
+        });
+      });
+
+      // Mock available models endpoint (used by useModels hook)
+      await page.route("**/api/models/available", async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            models: testData.mockModels,
+            hasKeys: {
+              anthropic: false,
+              openai: false,
+              google: false,
+              tavily: false,
+              openrouter: true,
+            },
+            providerModels: null,
+            errors: {},
+            timestamp: new Date().toISOString(),
           }),
         });
       });

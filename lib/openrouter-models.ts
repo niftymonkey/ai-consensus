@@ -41,10 +41,11 @@ let cacheTimestamp: number = 0;
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Extract provider name from model ID
+ * Extract provider name from OpenRouter model ID format.
+ * Only handles "provider/model" format - does not infer from direct format IDs.
  * e.g., "meta-llama/llama-3.1-70b-instruct" -> "meta-llama"
  */
-function extractProvider(modelId: string): string {
+function extractProviderFromId(modelId: string): string {
   const parts = modelId.split("/");
   return parts[0] || "unknown";
 }
@@ -81,7 +82,7 @@ function processModel(model: OpenRouterModel): OpenRouterModelWithMeta {
 
   return {
     ...model,
-    provider: extractProvider(model.id),
+    provider: extractProviderFromId(model.id),
     shortName: extractShortName(model.name),
     costPerMillionInput,
     costPerMillionOutput,
