@@ -41,8 +41,11 @@ export async function GET() {
     // Get the full OpenRouter catalog for model metadata
     const catalog = await fetchOpenRouterModels();
 
-    // If user has OpenRouter key, they can access all models (with OpenRouter format IDs)
-    if (hasKeys.openrouter) {
+    // Check if user has any direct provider keys
+    const hasAnyDirectKey = hasKeys.anthropic || hasKeys.openai || hasKeys.google;
+
+    // If user has OpenRouter key but NO direct keys, return all with OpenRouter format IDs
+    if (hasKeys.openrouter && !hasAnyDirectKey) {
       return NextResponse.json(
         {
           models: catalog,
@@ -59,17 +62,16 @@ export async function GET() {
       );
     }
 
-    // No OpenRouter key - filter to only direct providers and map to direct provider IDs
+    // User has direct keys (with or without OpenRouter)
+    // For providers with direct keys, we need direct format IDs since routing prefers direct
+    // For providers without direct keys (but with OpenRouter), keep OpenRouter format
+
     // Step 1: Check which models are actually available for each provider's API key
     const availability = await checkProviderAvailability(keys);
 
-    // Step 2: Filter and map using tested model-availability module
-    // This ensures:
-    // - Only models from providers with keys
-    // - Only models available in provider APIs
-    // - Direct provider format IDs (not OpenRouter format)
-    // - No duplicate model IDs
-    const filteredModels = filterAndMapModelsForDirectKeys(
+    // Step 2: Filter and map direct provider models to direct format IDs
+    // This ensures models from providers with direct keys use the correct ID format
+    const directProviderModels = filterAndMapModelsForDirectKeys(
       catalog,
       availability,
       {
@@ -78,6 +80,27 @@ export async function GET() {
         google: hasKeys.google,
       }
     );
+
+    // Step 3: If user has OpenRouter, also include non-direct provider models
+    // These keep OpenRouter format IDs since they'll be routed through OpenRouter
+    let finalModels = directProviderModels;
+
+    if (hasKeys.openrouter) {
+      const directProviders = ["anthropic", "openai", "google"];
+
+      // Add non-direct provider models (meta-llama, mistral, etc.)
+      // These keep OpenRouter format IDs since they'll be routed through OpenRouter
+      const openRouterOnlyModels = catalog.filter(model => {
+        // Skip direct providers - we already have those with correct IDs
+        if (directProviders.includes(model.provider)) {
+          return false;
+        }
+        // Include all other providers (will use OpenRouter)
+        return true;
+      });
+
+      finalModels = [...directProviderModels, ...openRouterOnlyModels];
+    }
 
     // Build provider-specific model lists for debugging/transparency
     const providerModels: Record<string, string[]> = {
@@ -88,7 +111,7 @@ export async function GET() {
 
     return NextResponse.json(
       {
-        models: filteredModels,
+        models: finalModels,
         hasKeys,
         providerModels,
         errors: availability.errors,

@@ -638,22 +638,29 @@ export default function ConsensusPage() {
             />
           ), { duration: Infinity });
         } else if (event.data.errorType === 'rate-limit') {
-          // Check if this is a free model
+          // Check if this is a free model (OpenRouter free tier)
           const isFreeModel = selectedModels.find(m => m.id === event.data.modelId)?.modelId.endsWith(':free');
 
-          toast.custom((id) => (
-            <CustomErrorToast
-              id={id}
-              title="Model rate limited"
-              description={isFreeModel
-                ? `${event.data.modelLabel} hit rate limits. Free models have shared rate limits - get your own API key or hide free models to avoid this.`
-                : `${event.data.modelLabel} is temporarily rate-limited. Wait a moment and retry, or use your own API key for higher limits.`}
-              actionLabel="Get API Key"
-              actionOnClick={() => window.open("https://openrouter.ai/settings/integrations", "_blank")}
-              cancelLabel={isFreeModel ? "Hide Free Models" : undefined}
-              cancelOnClick={isFreeModel ? () => window.location.href = "/settings" : undefined}
-            />
-          ), { duration: Infinity });
+          if (isFreeModel) {
+            // Free models have shared rate limits - suggest getting own key
+            toast.custom((id) => (
+              <CustomErrorToast
+                id={id}
+                title="Model rate limited"
+                description={`${event.data.modelLabel} hit rate limits. Free models have shared rate limits - get your own API key or hide free models to avoid this.`}
+                actionLabel="Get API Key"
+                actionOnClick={() => window.open("https://openrouter.ai/settings/integrations", "_blank")}
+                cancelLabel="Hide Free Models"
+                cancelOnClick={() => window.location.href = "/settings"}
+              />
+            ), { duration: Infinity });
+          } else {
+            // User's own key hit rate limits - just inform them
+            toast.error(`${event.data.modelLabel} rate limited`, {
+              description: "Wait a moment and try again, or try a different model.",
+              duration: 8000,
+            });
+          }
         } else {
           toast.error(`${event.data.modelLabel} failed to respond`, {
             description: event.data.error,
