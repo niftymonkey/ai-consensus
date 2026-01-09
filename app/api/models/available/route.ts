@@ -19,6 +19,28 @@ export const runtime = "nodejs";
  * Priority: Direct provider keys take precedence over OpenRouter.
  */
 export async function GET() {
+  // Check for database connection - required for this endpoint
+  if (!process.env.POSTGRES_URL) {
+    // In test/CI environments without a database, return empty response
+    // E2E tests mock this endpoint, so this only happens during SSR warm-up
+    return NextResponse.json(
+      {
+        models: [],
+        hasKeys: {
+          anthropic: false,
+          openai: false,
+          google: false,
+          tavily: false,
+          openrouter: false,
+        },
+        providerModels: null,
+        errors: { database: "Database not configured" },
+        timestamp: new Date().toISOString(),
+      },
+      { status: 200 }
+    );
+  }
+
   const session = await auth();
 
   if (!session?.user?.id) {
