@@ -34,6 +34,27 @@ test.describe("Consensus Workflow", () => {
         }),
       });
     });
+
+    // Mock available models endpoint (used by useModels hook)
+    await page.route("**/api/models/available", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          models: testData.mockModels,
+          hasKeys: {
+            anthropic: false,
+            openai: false,
+            google: false,
+            tavily: false,
+            openrouter: true,
+          },
+          providerModels: null,
+          errors: {},
+          timestamp: new Date().toISOString(),
+        }),
+      });
+    });
   });
 
   test.describe("Consensus Page UI", () => {
@@ -288,6 +309,27 @@ test.describe("No API Keys State", () => {
             google: null,
             tavily: null,
           },
+        }),
+      });
+    });
+
+    // Mock available models endpoint - no keys configured, no models
+    await page.route("**/api/models/available", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          models: [],
+          hasKeys: {
+            anthropic: false,
+            openai: false,
+            google: false,
+            tavily: false,
+            openrouter: false,
+          },
+          providerModels: null,
+          errors: {},
+          timestamp: new Date().toISOString(),
         }),
       });
     });
