@@ -128,9 +128,23 @@ export default function ConsensusPage() {
     resumeAutoScroll();
   }, [resumeAutoScroll]);
 
-  // Initialize default models when models are loaded
+  // Initialize default models when models are loaded (only if no saved preferences)
   useEffect(() => {
     if (models.length > 0 && selectedModels.length === 0) {
+      // Check if user has saved preferences - if so, let SettingsPanel handle restoration
+      try {
+        const stored = localStorage.getItem("consensusPreferences");
+        if (stored) {
+          const prefs = JSON.parse(stored);
+          if (prefs.models && prefs.models.length >= 2) {
+            // User has saved preferences, skip setting defaults
+            return;
+          }
+        }
+      } catch {
+        // If localStorage fails, continue with defaults
+      }
+
       const defaultModels: ModelSelection[] = [];
 
       // Find a good Anthropic model (Claude Sonnet preferred)
@@ -168,9 +182,23 @@ export default function ConsensusPage() {
     }
   }, [models, selectedModels.length]);
 
-  // Initialize default evaluator model when models are loaded
+  // Initialize default evaluator model when models are loaded (only if no saved preferences)
   useEffect(() => {
     if (models.length > 0 && evaluatorModel === "claude-3-7-sonnet-20250219") {
+      // Check if user has saved preferences - if so, let SettingsPanel handle restoration
+      try {
+        const stored = localStorage.getItem("consensusPreferences");
+        if (stored) {
+          const prefs = JSON.parse(stored);
+          if (prefs.evaluatorModel) {
+            // User has saved preferences, skip setting defaults
+            return;
+          }
+        }
+      } catch {
+        // If localStorage fails, continue with defaults
+      }
+
       // Filter evaluation-suitable models (exclude nano/mini/lite/flash)
       const suitableModels = models.filter((m) => {
         const lower = m.name.toLowerCase();
