@@ -373,6 +373,10 @@ export default function ConsensusPage() {
           current_round: currentRoundRef.current,
           max_rounds: maxRounds,
           model_count: selectedModels.length,
+          models: selectedModels.map(m => m.modelId),
+          evaluator_model: evaluatorModel,
+          consensus_threshold: consensusThreshold,
+          search_enabled: enableSearch,
         });
         posthog.captureException(error);
         toast.error("Consensus failed", {
@@ -584,6 +588,16 @@ export default function ConsensusPage() {
 
       case "model-error":
         console.warn(`Model error received:`, event.data);
+        // Track model error in PostHog
+        posthog.capture("model_error", {
+          model_id: event.data.modelId,
+          model_label: event.data.modelLabel,
+          error_message: event.data.error,
+          error_type: event.data.errorType || "unknown",
+          round: event.data.round,
+          all_models: selectedModels.map(m => m.modelId),
+          evaluator_model: evaluatorModel,
+        });
         // Check if this is an OpenRouter privacy error
         if (event.data.errorType === 'openrouter-privacy') {
           toast.custom((id) => (
@@ -627,18 +641,32 @@ export default function ConsensusPage() {
         setTimeout(() => setOverallStatus(null), 2000); // Clear after 2 seconds
 
         // Track consensus completed
+        const finalScore = currentEvaluationRef.current?.score ?? 0;
         posthog.capture("consensus_completed", {
           total_rounds: currentRoundRef.current,
           max_rounds: maxRounds,
           model_count: selectedModels.length,
           models: selectedModels.map(m => m.modelId),
-          final_score: currentEvaluationRef.current?.score,
+          evaluator_model: evaluatorModel,
+          final_score: finalScore,
           consensus_threshold: consensusThreshold,
+          reached_consensus: finalScore >= consensusThreshold,
+          search_enabled: enableSearch,
         });
         break;
 
       case "error":
         console.error("Consensus error:", event.data);
+        // Track stream error in PostHog (different from client-side consensus_error)
+        posthog.capture("consensus_stream_error", {
+          error_message: event.data?.message || "Unknown stream error",
+          current_round: event.data?.round || currentRoundRef.current,
+          max_rounds: maxRounds,
+          model_count: selectedModels.length,
+          models: selectedModels.map(m => m.modelId),
+          evaluator_model: evaluatorModel,
+          consensus_threshold: consensusThreshold,
+        });
         toast.error("Consensus error", {
           description: event.data?.message || "An error occurred during consensus generation. Please try again.",
           duration: 8000,
