@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { ConsensusHeader } from "@/components/consensus/consensus-header";
 import { ConsensusInput } from "@/components/consensus/consensus-input";
 import { NoKeysAlert } from "@/components/consensus/no-keys-alert";
@@ -15,6 +15,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { CustomErrorToast } from "@/components/ui/custom-error-toast";
 import posthog from "posthog-js";
+import { PRESETS, resolvePreset, type PresetId } from "@/lib/presets";
 import type {
   ModelSelection,
   RoundData,
@@ -72,6 +73,10 @@ export default function ConsensusPage() {
     });
   }, [models]);
 
+  // Preset state - track last selected preset and its model IDs
+  const [selectedPresetId, setSelectedPresetId] = useState<PresetId | null>(null);
+  const [presetModelIds, setPresetModelIds] = useState<string[]>([]);
+
   // Settings
   const [maxRounds, setMaxRounds] = useState(3);
   const [consensusThreshold, setConsensusThreshold] = useState(80);
@@ -81,6 +86,35 @@ export default function ConsensusPage() {
 
   // Model selection (2-3 models)
   const [selectedModels, setSelectedModels] = useState<ModelSelection[]>([]);
+
+  // Compute if current settings match the selected preset (for display)
+  const activePreset = useMemo(() => {
+    if (!selectedPresetId) return null;
+
+    const preset = PRESETS[selectedPresetId];
+    if (!preset) return null;
+
+    // Check process settings
+    if (
+      maxRounds !== preset.maxRounds ||
+      consensusThreshold !== preset.consensusThreshold ||
+      enableSearch !== (preset.enableSearch ?? false)
+    ) {
+      return null;
+    }
+
+    // Check models match what preset selected
+    const currentModelIds = selectedModels.map(m => m.modelId).sort();
+    const expectedModelIds = [...presetModelIds].sort();
+    if (
+      currentModelIds.length !== expectedModelIds.length ||
+      currentModelIds.some((id, i) => id !== expectedModelIds[i])
+    ) {
+      return null;
+    }
+
+    return selectedPresetId;
+  }, [selectedPresetId, maxRounds, consensusThreshold, enableSearch, selectedModels, presetModelIds]);
 
   // Workflow state
   const [rounds, setRounds] = useState<RoundData[]>([]);
@@ -127,6 +161,96 @@ export default function ConsensusPage() {
     // Then resume auto-scroll
     resumeAutoScroll();
   }, [resumeAutoScroll]);
+
+  // Apply a preset - sets all settings at once
+  // Returns the resolved configuration for immediate use (since setState is async)
+  const applyPreset = useCallback((presetId: PresetId): {
+    models: ModelSelection[];
+    maxRounds: number;
+    consensusThreshold: number;
+    evaluatorModel: string;
+    enableSearch: boolean;
+  } | null => {
+    if (models.length === 0) return null;
+
+    try {
+      const resolved = resolvePreset(presetId, models);
+      const preset = resolved.preset;
+
+      // Set settings from preset
+      setMaxRounds(preset.maxRounds);
+      setConsensusThreshold(preset.consensusThreshold);
+      setEnableSearch(preset.enableSearch || false);
+
+      // Set selected models
+      const modelSelections: ModelSelection[] = resolved.selectedModels.map((m, i) => ({
+        id: `model-${i + 1}`,
+        provider: m.provider,
+        modelId: m.id,
+        label: m.shortName,
+      }));
+      setSelectedModels(modelSelections);
+
+      // Set evaluator model
+      const evaluatorId = resolved.evaluatorModel?.id ?? evaluatorModel;
+      if (resolved.evaluatorModel) {
+        setEvaluatorModel(evaluatorId);
+      }
+
+      // Update preset state
+      setSelectedPresetId(presetId);
+      setPresetModelIds(modelSelections.map(m => m.modelId));
+
+      // Collapse settings panel after applying preset
+      setSettingsExpanded(false);
+
+      // Track preset selection
+      posthog.capture("preset_selected", {
+        preset_id: presetId,
+        preset_name: preset.name,
+        model_count: preset.modelCount,
+        selected_models: modelSelections.map(m => m.modelId),
+        evaluator_model: evaluatorId,
+      });
+
+      // Return resolved config for immediate use
+      return {
+        models: modelSelections,
+        maxRounds: preset.maxRounds,
+        consensusThreshold: preset.consensusThreshold,
+        evaluatorModel: evaluatorId,
+        enableSearch: preset.enableSearch || false,
+      };
+    } catch (error) {
+      console.error("Failed to apply preset:", error);
+      toast.error("Could not apply preset", {
+        description: "Not enough models available for this preset.",
+      });
+      return null;
+    }
+  }, [models, evaluatorModel]);
+
+  // Initialize with balanced preset on first load (only if no saved preferences)
+  useEffect(() => {
+    if (models.length === 0 || selectedModels.length > 0) return;
+
+    // Check if user has saved preferences
+    try {
+      const stored = localStorage.getItem("consensusPreferences");
+      if (stored) {
+        const prefs = JSON.parse(stored);
+        if (prefs.models && prefs.models.length >= 2) {
+          // User has saved preferences, skip preset initialization
+          return;
+        }
+      }
+    } catch {
+      // If localStorage fails, continue with preset
+    }
+
+    // Apply balanced preset by default
+    applyPreset("balanced");
+  }, [models, selectedModels.length, applyPreset]);
 
   // Initialize default models when models are loaded (only if no saved preferences)
   useEffect(() => {
@@ -232,6 +356,24 @@ export default function ConsensusPage() {
     }
   }, [models, evaluatorModel]);
 
+  // Restore selectedPresetId and presetModelIds from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("consensusPreferences");
+      if (stored) {
+        const prefs = JSON.parse(stored);
+        if (prefs.activePreset) {
+          setSelectedPresetId(prefs.activePreset);
+        }
+        if (prefs.presetModelIds) {
+          setPresetModelIds(prefs.presetModelIds);
+        }
+      }
+    } catch {
+      // If localStorage fails, leave preset state as null
+    }
+  }, []);
+
   // Auto-scroll: Trigger scroll when scrollTrigger increments
   useEffect(() => {
     if (scrollTrigger > 0 && (isProcessing || isSynthesizing || isGeneratingProgression)) {
@@ -262,9 +404,26 @@ export default function ConsensusPage() {
     setOverallStatus(null);
   }
 
-  async function submitConsensus(promptValue: string) {
+  // Optional override config for when we need to use freshly-resolved preset values
+  // (since setState is async and the state won't be updated yet)
+  interface SubmitConfig {
+    models: ModelSelection[];
+    maxRounds: number;
+    consensusThreshold: number;
+    evaluatorModel: string;
+    enableSearch: boolean;
+  }
+
+  async function submitConsensus(promptValue: string, overrideConfig?: SubmitConfig) {
+    // Use override config if provided (for preset+submit), otherwise use state
+    const modelsToUse = overrideConfig?.models ?? selectedModels;
+    const maxRoundsToUse = overrideConfig?.maxRounds ?? maxRounds;
+    const thresholdToUse = overrideConfig?.consensusThreshold ?? consensusThreshold;
+    const evaluatorToUse = overrideConfig?.evaluatorModel ?? evaluatorModel;
+    const searchToUse = overrideConfig?.enableSearch ?? enableSearch;
+
     if (!promptValue.trim()) return;
-    if (selectedModels.length < 2 || selectedModels.length > 3) {
+    if (modelsToUse.length < 2 || modelsToUse.length > 3) {
       toast.error("Invalid model selection", {
         description: "Please select 2-3 models to continue.",
       });
@@ -273,19 +432,19 @@ export default function ConsensusPage() {
 
     // Log models being used
     console.log('=== Starting Consensus Evaluation ===');
-    console.log('Selected models:', selectedModels.map(m => `${m.provider}:${m.modelId} (${m.label})`));
-    console.log('Evaluator model:', evaluatorModel);
-    console.log('Max rounds:', maxRounds);
-    console.log('Consensus threshold:', consensusThreshold + '%');
+    console.log('Selected models:', modelsToUse.map(m => `${m.provider}:${m.modelId} (${m.label})`));
+    console.log('Evaluator model:', evaluatorToUse);
+    console.log('Max rounds:', maxRoundsToUse);
+    console.log('Consensus threshold:', thresholdToUse + '%');
 
     // Track consensus started (conversion event)
     posthog.capture("consensus_started", {
-      model_count: selectedModels.length,
-      models: selectedModels.map(m => m.modelId),
-      evaluator_model: evaluatorModel,
-      max_rounds: maxRounds,
-      consensus_threshold: consensusThreshold,
-      search_enabled: enableSearch,
+      model_count: modelsToUse.length,
+      models: modelsToUse.map(m => m.modelId),
+      evaluator_model: evaluatorToUse,
+      max_rounds: maxRoundsToUse,
+      consensus_threshold: thresholdToUse,
+      search_enabled: searchToUse,
       prompt_length: promptValue.length,
     });
 
@@ -331,11 +490,11 @@ export default function ConsensusPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: promptValue,
-          models: selectedModels,
-          maxRounds,
-          consensusThreshold,
-          evaluatorModel,
-          enableSearch,
+          models: modelsToUse,
+          maxRounds: maxRoundsToUse,
+          consensusThreshold: thresholdToUse,
+          evaluatorModel: evaluatorToUse,
+          enableSearch: searchToUse,
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -399,12 +558,12 @@ export default function ConsensusPage() {
         posthog.capture("consensus_error", {
           error_message: error.message || "Unknown error",
           current_round: currentRoundRef.current,
-          max_rounds: maxRounds,
-          model_count: selectedModels.length,
-          models: selectedModels.map(m => m.modelId),
-          evaluator_model: evaluatorModel,
-          consensus_threshold: consensusThreshold,
-          search_enabled: enableSearch,
+          max_rounds: maxRoundsToUse,
+          model_count: modelsToUse.length,
+          models: modelsToUse.map(m => m.modelId),
+          evaluator_model: evaluatorToUse,
+          consensus_threshold: thresholdToUse,
+          search_enabled: searchToUse,
         });
         posthog.captureException(error);
         toast.error("Consensus failed", {
@@ -431,6 +590,14 @@ export default function ConsensusPage() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     submitConsensus(prompt);
+  }
+
+  // Handle submission with preset - applies preset and submits atomically
+  function handleSubmitWithPreset(promptValue: string, presetId: PresetId) {
+    const config = applyPreset(presetId);
+    if (config) {
+      submitConsensus(promptValue, config);
+    }
   }
 
   function handleStreamEvent(event: ConsensusStreamEvent) {
@@ -774,11 +941,13 @@ export default function ConsensusPage() {
             isLoading={isProcessing || isSynthesizing || isGeneratingProgression}
             onSubmit={handleSubmit}
             onSubmitWithPrompt={submitConsensus}
+            onPresetSelect={applyPreset}
+            onSubmitWithPreset={handleSubmitWithPreset}
             showSuggestions={!finalConsensus}
           />
         </div>
 
-        {/* Settings Panel */}
+        {/* Settings Panel (includes Preset Selector) */}
         {models.length > 0 && (
           <div className="mx-auto w-full max-w-4xl">
             <SettingsPanel
@@ -800,6 +969,9 @@ export default function ConsensusPage() {
               openRouterModels={models}
               openRouterGroupedModels={groupedModels}
               openRouterLoading={modelsLoading}
+              activePreset={activePreset}
+              presetModelIds={presetModelIds}
+              onPresetSelect={applyPreset}
             />
           </div>
         )}

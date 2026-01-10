@@ -1,18 +1,34 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { ChevronDown, ChevronUp, Settings as SettingsIcon } from "lucide-react";
-import Link from "next/link";
+import {
+  ChevronDown,
+  ChevronUp,
+  Zap,
+  Scale,
+  FlaskConical,
+  Code,
+  Sparkles,
+  type LucideIcon,
+} from "lucide-react";
 import posthog from "posthog-js";
-import { UnifiedModelSelector } from "./unified-model-selector";
-import { ConsensusSettings } from "./consensus-settings";
+import { PresetSelector } from "./preset-selector";
+import { ModelsSection } from "./models-section";
+import { ProcessSection } from "./process-section";
+import { PRESETS, type PresetId } from "@/lib/presets";
 import type { ModelSelection } from "@/lib/types";
 import type { OpenRouterModelWithMeta } from "@/lib/openrouter-models";
-import { getProviderColor } from "@/lib/provider-colors";
+
+// Map icon names to Lucide components for collapsed state
+const ICON_MAP: Record<string, LucideIcon> = {
+  Zap,
+  Scale,
+  FlaskConical,
+  Code,
+  Sparkles,
+};
 
 interface AvailableKeys {
   anthropic: boolean;
@@ -23,11 +39,13 @@ interface AvailableKeys {
 }
 
 interface ConsensusPreferences {
-  models: Array<{provider: string, modelId: string, label: string}>;
+  models: Array<{ provider: string; modelId: string; label: string }>;
   maxRounds: number;
   threshold: number;
   evaluatorModel: string;
   enableSearch: boolean;
+  activePreset: PresetId | null;
+  presetModelIds?: string[]; // Model IDs that were set by the preset
   lastUpdated: number;
 }
 
@@ -47,10 +65,12 @@ interface SettingsPanelProps {
   isProcessing?: boolean;
   isExpanded: boolean;
   setIsExpanded: (expanded: boolean) => void;
-  // OpenRouter models for the unified model selector
   openRouterModels: OpenRouterModelWithMeta[];
   openRouterGroupedModels: Record<string, OpenRouterModelWithMeta[]>;
   openRouterLoading?: boolean;
+  activePreset: PresetId | null;
+  presetModelIds: string[];
+  onPresetSelect: (presetId: PresetId) => void;
 }
 
 const STORAGE_KEY = "consensusPreferences";
@@ -74,9 +94,13 @@ export function SettingsPanel({
   openRouterModels,
   openRouterGroupedModels,
   openRouterLoading = false,
+  activePreset,
+  presetModelIds,
+  onPresetSelect,
 }: SettingsPanelProps) {
   const [hasLoadedPreferences, setHasLoadedPreferences] = useState(false);
   const [skipNextSave, setSkipNextSave] = useState(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-collapse when processing starts
   useEffect(() => {
@@ -85,10 +109,9 @@ export function SettingsPanel({
     }
   }, [isProcessing, setIsExpanded]);
 
-  // Load preferences on mount (wait for models to load first)
+  // Load preferences on mount
   useEffect(() => {
     if (hasLoadedPreferences) return;
-    // Wait for models to load before restoring preferences
     if (openRouterLoading || openRouterModels.length === 0) return;
 
     try {
@@ -96,37 +119,33 @@ export function SettingsPanel({
       if (stored) {
         const prefs: ConsensusPreferences = JSON.parse(stored);
 
-        // Restore model selections (only models that are still available)
         if (prefs.models && prefs.models.length >= 2) {
-          // Filter to only models that exist in the current available models
-          const availableModelIds = new Set(openRouterModels.map(m => m.id));
-          const validModels = prefs.models.filter(m => availableModelIds.has(m.modelId));
+          const availableModelIds = new Set(openRouterModels.map((m) => m.id));
+          const validModels = prefs.models.filter((m) =>
+            availableModelIds.has(m.modelId)
+          );
 
-          // Only restore if we have at least 2 valid models
           if (validModels.length >= 2) {
-            const restoredModels: ModelSelection[] = validModels.map((m, idx) => ({
-              id: `model-${idx + 1}`,
-              provider: m.provider,
-              modelId: m.modelId,
-              label: m.label,
-            }));
+            const restoredModels: ModelSelection[] = validModels.map(
+              (m, idx) => ({
+                id: `model-${idx + 1}`,
+                provider: m.provider,
+                modelId: m.modelId,
+                label: m.label,
+              })
+            );
             setSelectedModels(restoredModels);
           }
         }
 
-        // Restore other settings
         setMaxRounds(prefs.maxRounds);
         setConsensusThreshold(prefs.threshold);
         setEvaluatorModel(prefs.evaluatorModel);
-        // Only restore enableSearch if Tavily key is still available
         if (prefs.enableSearch !== undefined && availableKeys.tavily) {
           setEnableSearch(prefs.enableSearch);
         }
 
-        // Collapse by default if preferences exist
         setIsExpanded(false);
-
-        // Skip the next save to prevent overwriting with stale props
         setSkipNextSave(true);
       }
 
@@ -135,13 +154,13 @@ export function SettingsPanel({
       console.error("Failed to load consensus preferences:", error);
       setHasLoadedPreferences(true);
     }
-  }, [hasLoadedPreferences, setIsExpanded, openRouterLoading, openRouterModels]);
+  }, [hasLoadedPreferences, setIsExpanded, openRouterLoading, openRouterModels, availableKeys.tavily, setSelectedModels, setMaxRounds, setConsensusThreshold, setEvaluatorModel, setEnableSearch]);
 
-  // Save preferences to localStorage
+  // Save preferences
   const savePreferences = useCallback(() => {
     try {
       const prefs: ConsensusPreferences = {
-        models: selectedModels.map(m => ({
+        models: selectedModels.map((m) => ({
           provider: m.provider,
           modelId: m.modelId,
           label: m.label,
@@ -150,6 +169,8 @@ export function SettingsPanel({
         threshold: consensusThreshold,
         evaluatorModel,
         enableSearch,
+        activePreset,
+        presetModelIds,
         lastUpdated: Date.now(),
       };
 
@@ -157,27 +178,21 @@ export function SettingsPanel({
     } catch (error) {
       console.error("Failed to save consensus preferences:", error);
     }
-  }, [selectedModels, maxRounds, consensusThreshold, evaluatorModel, enableSearch]);
+  }, [selectedModels, maxRounds, consensusThreshold, evaluatorModel, enableSearch, activePreset, presetModelIds]);
 
-  // Auto-save preferences when settings change (debounced)
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
+  // Auto-save on changes (debounced)
   useEffect(() => {
-    // Don't auto-save until initial preferences have been loaded
     if (!hasLoadedPreferences) return;
 
-    // Skip the first save after loading to prevent overwriting with stale props
     if (skipNextSave) {
       setSkipNextSave(false);
       return;
     }
 
-    // Clear any pending save
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
 
-    // Debounce save by 300ms
     saveTimeoutRef.current = setTimeout(() => {
       savePreferences();
     }, 300);
@@ -192,24 +207,22 @@ export function SettingsPanel({
   const handleExpand = () => {
     if (disabled) return;
     setIsExpanded(true);
-    posthog.capture("settings_panel_toggled", {
-      expanded: true,
-    });
+    posthog.capture("settings_panel_toggled", { expanded: true });
   };
 
   const handleCollapse = () => {
     setIsExpanded(false);
-    posthog.capture("settings_panel_toggled", {
-      expanded: false,
-    });
+    posthog.capture("settings_panel_toggled", { expanded: false });
   };
 
   const handleSearchToggle = (checked: boolean) => {
     setEnableSearch(checked);
-    posthog.capture("web_search_toggled", {
-      enabled: checked,
-    });
+    posthog.capture("web_search_toggled", { enabled: checked });
   };
+
+  // Get preset info for collapsed state
+  const activePresetDef = activePreset ? PRESETS[activePreset] : null;
+  const PresetIcon = activePresetDef ? ICON_MAP[activePresetDef.icon] : null;
 
   if (!isExpanded) {
     return (
@@ -221,26 +234,24 @@ export function SettingsPanel({
         <Card className="transition-colors hover:bg-accent/50 cursor-pointer">
           <div className="px-4 py-3 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 flex-wrap min-w-0">
-              {/* Model chips */}
-              <div className="flex items-center gap-2 flex-wrap">
-                {selectedModels.map((model) => (
-                  <span
-                    key={model.id}
-                    className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border ${getProviderColor(model.provider)}`}
-                  >
-                    {model.label}
-                  </span>
-                ))}
-              </div>
-              {/* Settings summary */}
+              <span className="flex items-center gap-1.5 font-medium text-sm">
+                {activePresetDef && PresetIcon ? (
+                  <>
+                    <PresetIcon className="h-4 w-4" />
+                    {activePresetDef.name}
+                  </>
+                ) : (
+                  "Custom"
+                )}
+              </span>
               <span className="text-sm text-muted-foreground whitespace-nowrap">
-                • {maxRounds} round{maxRounds !== 1 ? "s" : ""} • {consensusThreshold}%{enableSearch ? " • search" : ""}
+                • {selectedModels.length} model
+                {selectedModels.length !== 1 ? "s" : ""} • {maxRounds} round
+                {maxRounds !== 1 ? "s" : ""} • {consensusThreshold}%
+                {enableSearch ? " • search" : ""}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-muted-foreground shrink-0">
-              <SettingsIcon className="h-4 w-4" />
-              <ChevronDown className="h-4 w-4" />
-            </div>
+            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
           </div>
         </Card>
       </button>
@@ -249,69 +260,54 @@ export function SettingsPanel({
 
   return (
     <Card>
-      <CardHeader>
+      <CardContent className="pt-3 space-y-3">
+        {/* Header with Collapse */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <SettingsIcon className="h-5 w-5" />
-            <CardTitle>Settings</CardTitle>
-          </div>
+          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide sm:hidden">
+            Presets
+          </h3>
           <Button
             variant="ghost"
             size="sm"
             onClick={handleCollapse}
             disabled={disabled}
+            className="shrink-0 ml-auto"
           >
-            <ChevronUp className="h-4 w-4 mr-1" />
-            Collapse
+            <ChevronUp className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">Collapse</span>
           </Button>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <UnifiedModelSelector
-            models={openRouterModels}
-            groupedModels={openRouterGroupedModels}
-            selectedModels={selectedModels}
-            setSelectedModels={setSelectedModels}
-            disabled={disabled}
-            isLoading={openRouterLoading}
-          />
 
-          <ConsensusSettings
-            maxRounds={maxRounds}
-            setMaxRounds={setMaxRounds}
-            consensusThreshold={consensusThreshold}
-            setConsensusThreshold={setConsensusThreshold}
-            evaluatorModel={evaluatorModel}
-            setEvaluatorModel={setEvaluatorModel}
-            openRouterModels={openRouterModels}
-            disabled={disabled}
-          />
-        </div>
+        {/* Preset Selector */}
+        <PresetSelector
+          activePreset={activePreset}
+          onPresetSelect={onPresetSelect}
+          disabled={disabled}
+        />
 
-        <div className="flex items-center justify-between p-4 border rounded-lg">
-          <div className="space-y-1">
-            <Label htmlFor="enable-search">Enable Web Search</Label>
-            <p className="text-xs text-muted-foreground">
-              {availableKeys.tavily ? (
-                "Provides models with current web information"
-              ) : (
-                <>
-                  <Link href="/settings" className="underline">
-                    Add Tavily API key
-                  </Link>{" "}
-                  to enable
-                </>
-              )}
-            </p>
-          </div>
-          <Switch
-            id="enable-search"
-            checked={enableSearch}
-            onCheckedChange={handleSearchToggle}
-            disabled={disabled || !availableKeys.tavily}
-          />
-        </div>
+        {/* Models Section */}
+        <ModelsSection
+          models={openRouterModels}
+          groupedModels={openRouterGroupedModels}
+          selectedModels={selectedModels}
+          setSelectedModels={setSelectedModels}
+          evaluatorModel={evaluatorModel}
+          setEvaluatorModel={setEvaluatorModel}
+          disabled={disabled}
+          isLoading={openRouterLoading}
+        />
+
+        {/* Process Section */}
+        <ProcessSection
+          maxRounds={maxRounds}
+          setMaxRounds={setMaxRounds}
+          consensusThreshold={consensusThreshold}
+          setConsensusThreshold={setConsensusThreshold}
+          enableSearch={enableSearch}
+          setEnableSearch={handleSearchToggle}
+          hasTavilyKey={availableKeys.tavily}
+          disabled={disabled}
+        />
       </CardContent>
     </Card>
   );

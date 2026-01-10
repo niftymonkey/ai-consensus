@@ -84,13 +84,13 @@ export function UnifiedModelSelector({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Model Selection</CardTitle>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Participating Models</CardTitle>
         <CardDescription>
           Select 2-3 AI models to compare. Search or browse by provider.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="pt-0 space-y-3">
         {selectedModels.map((model, index) => (
           <div key={model.id} className="flex items-center gap-4">
             <div className="flex-1 min-w-0">
