@@ -1,4 +1,4 @@
-import type { ModelSelection } from "./types";
+import type { ModelSelection, ConsensusEvaluation } from "./types";
 import type { TavilySearchResult } from "./tavily";
 
 /**
@@ -23,17 +23,21 @@ Please incorporate relevant information from these sources in your response, cit
 }
 
 /**
- * Build refinement prompt for a model to refine its response based on other models' responses
+ * Build refinement prompt for a model to refine its response based on other models' responses.
+ * Optionally includes evaluation insights (key differences and areas of agreement) for targeted refinement.
  */
 export function buildRefinementPrompt(
   originalPrompt: string,
   modelId: string,
   modelLabel: string,
-  ownPreviousResponse: string,
   allResponses: Map<string, string>,
   selectedModels: ModelSelection[],
-  round: number
+  round: number,
+  previousEvaluation?: ConsensusEvaluation | null
 ): string {
+  // Extract own response from the map (was redundant parameter before)
+  const ownPreviousResponse = allResponses.get(modelId) || "";
+
   // Build "other models" section - exclude the current model
   const otherModelsText = selectedModels
     .filter((m) => m.id !== modelId)
@@ -43,23 +47,49 @@ export function buildRefinementPrompt(
     })
     .join("\n\n");
 
+  // Build evaluation insights section if available
+  const evaluationInsights = previousEvaluation
+    ? `## Evaluator Insights
+
+Note: You are ${modelLabel}. Look for references to your model name in the feedback below.
+
+**Key differences to resolve:**
+${previousEvaluation.keyDifferences.map((d) => `- ${d}`).join("\n")}
+
+**Areas of agreement to build on:**
+${previousEvaluation.areasOfAgreement.map((a) => `- ${a}`).join("\n")}
+
+`
+    : "";
+
+  // Build instructions based on whether we have evaluation
+  const instructions = previousEvaluation
+    ? `1. Focus on resolving the key differences identified above
+2. Build on the areas of agreement
+3. Incorporate valid points from other models
+4. Clarify any ambiguities
+5. Move toward consensus while maintaining accuracy`
+    : `1. Address any divergences or disagreements
+2. Incorporate valid points from other models
+3. Clarify any ambiguities
+4. Move toward consensus while maintaining accuracy`;
+
   return `Original Question: ${originalPrompt}
 
 Round ${round} - Refinement Phase
 
-Your previous response (${modelLabel}):
+${evaluationInsights}## Your Previous Response (${modelLabel})
+
 ${ownPreviousResponse}
 
-Other models' responses:
+## Other Models' Responses
+
 ${otherModelsText}
 
-Please refine your answer considering these other perspectives:
-1. Address any divergences or disagreements
-2. Incorporate valid points from other models
-3. Clarify any ambiguities
-4. Move toward consensus while maintaining accuracy
+---
 
-Provide your refined response:`;
+Please refine your answer considering these other perspectives:
+${instructions}`;
 }
 
 /**

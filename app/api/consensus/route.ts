@@ -19,7 +19,7 @@ import { createOpenRouterProvider, parseAIError } from "@/lib/openrouter";
 import { getRouteForModel, resolveProvider, extractDirectModelId, isDirectProviderName, type KeySet } from "@/lib/model-routing";
 import { sendEvent, type ConsensusEvent } from "@/lib/consensus-events";
 import { logger } from "@/lib/logger";
-import { captureServerException } from "@/lib/posthog-server";
+import { captureServerException, getPostHogClient } from "@/lib/posthog-server";
 import { z } from "zod";
 
 export const maxDuration = 600; // 10 minutes for multiple rounds
@@ -94,8 +94,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check feature flag for targeted refinement prompts
+    // TODO: Re-enable feature flag check once PostHog is debugged
+    // const posthog = getPostHogClient();
+    // const useTargetedRefinement = await posthog.isFeatureEnabled(
+    //   'targeted-refinement-prompts',
+    //   session.user.id
+    // ) ?? false;
+    const useTargetedRefinement = true; // Temporarily hardcoded for testing
+
     // Log request summary
-    console.log(`[Consensus] Starting: ${models.length} models, evaluator=${evaluatorModel}, maxRounds=${maxRounds}, threshold=${consensusThreshold}%, search=${enableSearch}`);
+    console.log(`[Consensus] Starting: ${models.length} models, evaluator=${evaluatorModel}, maxRounds=${maxRounds}, threshold=${consensusThreshold}%, search=${enableSearch}, targetedRefinement=${useTargetedRefinement}`);
 
     // Create provider instances based on available keys
     // Direct provider keys take precedence over OpenRouter
@@ -336,6 +345,8 @@ export async function POST(request: NextRequest) {
               round: currentRound,
               signal: request.signal,
               searchData: searchData || undefined,
+              previousEvaluation: currentRound > 1 ? previousEvaluation : undefined,
+              useTargetedRefinement,
             });
 
             // Check if aborted after generating responses
@@ -457,7 +468,8 @@ export async function POST(request: NextRequest) {
                       prompt,
                       roundResponses,
                       models,
-                      currentRound + 1
+                      currentRound + 1,
+                      useTargetedRefinement ? evaluation : undefined
                     )
                   : undefined,
             });
@@ -468,7 +480,8 @@ export async function POST(request: NextRequest) {
                 prompt,
                 roundResponses,
                 models,
-                currentRound + 1
+                currentRound + 1,
+                useTargetedRefinement ? evaluation : undefined
               );
 
               if (!safeEnqueue({
@@ -625,6 +638,8 @@ async function generateRoundResponses(opts: {
   round: number;
   signal: AbortSignal;
   searchData?: SearchData;
+  previousEvaluation?: ConsensusEvaluation | null;
+  useTargetedRefinement?: boolean;
 }): Promise<Map<string, string>> {
   const responses = new Map<string, string>();
 
@@ -706,10 +721,10 @@ async function generateRoundResponses(opts: {
             opts.originalPrompt,
             modelSelection.id,
             modelSelection.label,
-            opts.previousResponses!.get(modelSelection.id) || "",
             opts.previousResponses!,
             opts.selectedModels,
-            opts.round
+            opts.round,
+            opts.useTargetedRefinement ? opts.previousEvaluation : undefined
           );
 
       // Inject search context if available
@@ -862,7 +877,8 @@ function buildRefinementPromptsForAllModels(
   originalPrompt: string,
   responses: Map<string, string>,
   selectedModels: ModelSelection[],
-  nextRound: number
+  nextRound: number,
+  previousEvaluation?: ConsensusEvaluation | null
 ): Record<string, string> {
   const prompts: Record<string, string> = {};
 
@@ -871,10 +887,10 @@ function buildRefinementPromptsForAllModels(
       originalPrompt,
       model.id,
       model.label,
-      responses.get(model.id)!,
       responses,
       selectedModels,
-      nextRound
+      nextRound,
+      previousEvaluation
     );
   }
 
