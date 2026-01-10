@@ -3,6 +3,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { PromptSuggestions } from "@/components/consensus/prompt-suggestions";
+import type { PresetId } from "@/lib/presets";
 
 interface ConsensusInputProps {
   prompt: string;
@@ -10,10 +11,12 @@ interface ConsensusInputProps {
   isLoading: boolean;
   onSubmit: (e: React.FormEvent) => void;
   onSubmitWithPrompt?: (prompt: string) => void;
+  onPresetSelect?: (presetId: PresetId) => void;
+  onSubmitWithPreset?: (prompt: string, presetId: PresetId) => void;
   showSuggestions?: boolean;
 }
 
-export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmitWithPrompt, showSuggestions = false }: ConsensusInputProps) {
+export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmitWithPrompt, onPresetSelect, onSubmitWithPreset, showSuggestions = false }: ConsensusInputProps) {
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -24,10 +27,19 @@ export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmi
     }
   }
 
-  const handleSuggestionSelect = (suggestion: string) => {
+  const handleSuggestionSelect = (suggestion: string, preset: PresetId) => {
     setPrompt(suggestion);
-    if (onSubmitWithPrompt) {
-      onSubmitWithPrompt(suggestion);
+    // Use the combined callback if available (handles preset + submit atomically)
+    if (onSubmitWithPreset) {
+      onSubmitWithPreset(suggestion, preset);
+    } else {
+      // Fallback to separate calls (may have race condition)
+      if (onPresetSelect) {
+        onPresetSelect(preset);
+      }
+      if (onSubmitWithPrompt) {
+        onSubmitWithPrompt(suggestion);
+      }
     }
   };
 

@@ -2,18 +2,33 @@
 
 import { useState, useEffect } from "react";
 import posthog from "posthog-js";
+import { PRESETS, type PresetId } from "@/lib/presets";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+interface SuggestionConfig {
+  prompt: string;
+  preset: PresetId;
+}
 
 interface PromptSuggestionsProps {
-  onSelect: (prompt: string) => void;
+  onSelect: (prompt: string, preset: PresetId) => void;
   disabled?: boolean;
   show?: boolean;
 }
 
-export const PROMPT_SUGGESTIONS = [
-  "Implement debounce in TypeScript",
-  "What is the meaning of life?",
-  "How should we regulate AI?",
+// Map each suggestion to its ideal preset
+const SUGGESTION_CONFIGS: SuggestionConfig[] = [
+  { prompt: "Implement debounce in TypeScript", preset: "coding" },
+  { prompt: "What is the meaning of life?", preset: "creative" },
+  { prompt: "How should we regulate AI?", preset: "research" },
 ];
+
+export const PROMPT_SUGGESTIONS = SUGGESTION_CONFIGS.map(s => s.prompt);
 
 const STORAGE_KEY = "usedPromptSuggestions";
 
@@ -32,10 +47,10 @@ export function PromptSuggestions({ onSelect, disabled, show = true }: PromptSug
     }
   }, []);
 
-  const handleSelect = (suggestion: string) => {
+  const handleSelect = (config: SuggestionConfig) => {
     // Mark as used and persist
     const newUsed = new Set(usedSuggestions);
-    newUsed.add(suggestion);
+    newUsed.add(config.prompt);
     setUsedSuggestions(newUsed);
 
     try {
@@ -46,33 +61,45 @@ export function PromptSuggestions({ onSelect, disabled, show = true }: PromptSug
 
     // Track prompt suggestion clicked
     posthog.capture("prompt_suggestion_clicked", {
-      suggestion,
-      suggestion_length: suggestion.length,
+      suggestion: config.prompt,
+      suggestion_length: config.prompt.length,
+      preset: config.preset,
     });
 
-    onSelect(suggestion);
+    onSelect(config.prompt, config.preset);
   };
 
   // Filter out used suggestions
-  const availableSuggestions = PROMPT_SUGGESTIONS.filter(s => !usedSuggestions.has(s));
+  const availableSuggestions = SUGGESTION_CONFIGS.filter(s => !usedSuggestions.has(s.prompt));
 
   if (!show || availableSuggestions.length === 0) {
     return null;
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {availableSuggestions.map((suggestion) => (
-        <button
-          key={suggestion}
-          type="button"
-          onClick={() => handleSelect(suggestion)}
-          disabled={disabled}
-          className="px-3 py-1.5 text-sm rounded-full border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {suggestion}
-        </button>
-      ))}
-    </div>
+    <TooltipProvider delayDuration={300}>
+      <div className="flex flex-wrap gap-2">
+        {availableSuggestions.map((config) => {
+          const presetName = PRESETS[config.preset]?.name ?? config.preset;
+          return (
+            <Tooltip key={config.prompt}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => handleSelect(config)}
+                  disabled={disabled}
+                  className="px-3 py-1.5 text-sm rounded-full border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {config.prompt}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                Uses {presetName} preset
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
+      </div>
+    </TooltipProvider>
   );
 }
