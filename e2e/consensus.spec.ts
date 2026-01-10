@@ -69,7 +69,7 @@ test.describe("Consensus Workflow", () => {
       ).toBeVisible();
 
       // Check for settings panel
-      await expect(page.getByText(/Model Selection/i).first()).toBeVisible();
+      await expect(page.getByText(/Participating Models/i).first()).toBeVisible();
     });
 
     test("displays prompt suggestion chips", async ({ page }) => {
@@ -106,8 +106,8 @@ test.describe("Consensus Workflow", () => {
     test("can expand and collapse settings panel", async ({ page }) => {
       await page.goto("/consensus");
 
-      // Find the collapse/settings toggle
-      const collapseButton = page.getByRole("button", { name: /Collapse/i });
+      // Find the collapse/settings toggle (use exact match to avoid conflict with issues badge)
+      const collapseButton = page.getByRole("button", { name: "Collapse", exact: true });
 
       if (await collapseButton.isVisible()) {
         // Toggle settings
@@ -120,7 +120,7 @@ test.describe("Consensus Workflow", () => {
       await page.goto("/consensus");
 
       // Look for model selection section
-      await expect(page.getByText(/Model Selection/i).first()).toBeVisible();
+      await expect(page.getByText(/Participating Models/i).first()).toBeVisible();
 
       // Should show the mocked models in comboboxes
       await expect(page.getByText(/Claude 3.5 Sonnet/i).first()).toBeVisible();

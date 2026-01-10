@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { ConsensusHeader } from "@/components/consensus/consensus-header";
 import { ConsensusInput } from "@/components/consensus/consensus-input";
 import { NoKeysAlert } from "@/components/consensus/no-keys-alert";
@@ -15,6 +15,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { CustomErrorToast } from "@/components/ui/custom-error-toast";
 import posthog from "posthog-js";
+import { PRESETS, resolvePreset, type PresetId } from "@/lib/presets";
 import type {
   ModelSelection,
   RoundData,
@@ -72,6 +73,10 @@ export default function ConsensusPage() {
     });
   }, [models]);
 
+  // Preset state - track last selected preset and its model IDs
+  const [selectedPresetId, setSelectedPresetId] = useState<PresetId | null>(null);
+  const [presetModelIds, setPresetModelIds] = useState<string[]>([]);
+
   // Settings
   const [maxRounds, setMaxRounds] = useState(3);
   const [consensusThreshold, setConsensusThreshold] = useState(80);
@@ -81,6 +86,35 @@ export default function ConsensusPage() {
 
   // Model selection (2-3 models)
   const [selectedModels, setSelectedModels] = useState<ModelSelection[]>([]);
+
+  // Compute if current settings match the selected preset (for display)
+  const activePreset = useMemo(() => {
+    if (!selectedPresetId) return null;
+
+    const preset = PRESETS[selectedPresetId];
+    if (!preset) return null;
+
+    // Check process settings
+    if (
+      maxRounds !== preset.maxRounds ||
+      consensusThreshold !== preset.consensusThreshold ||
+      enableSearch !== (preset.enableSearch ?? false)
+    ) {
+      return null;
+    }
+
+    // Check models match what preset selected
+    const currentModelIds = selectedModels.map(m => m.modelId).sort();
+    const expectedModelIds = [...presetModelIds].sort();
+    if (
+      currentModelIds.length !== expectedModelIds.length ||
+      currentModelIds.some((id, i) => id !== expectedModelIds[i])
+    ) {
+      return null;
+    }
+
+    return selectedPresetId;
+  }, [selectedPresetId, maxRounds, consensusThreshold, enableSearch, selectedModels, presetModelIds]);
 
   // Workflow state
   const [rounds, setRounds] = useState<RoundData[]>([]);
@@ -127,6 +161,78 @@ export default function ConsensusPage() {
     // Then resume auto-scroll
     resumeAutoScroll();
   }, [resumeAutoScroll]);
+
+  // Apply a preset - sets all settings at once
+  const applyPreset = useCallback((presetId: PresetId) => {
+    if (models.length === 0) return;
+
+    try {
+      const resolved = resolvePreset(presetId, models);
+      const preset = resolved.preset;
+
+      // Set settings from preset
+      setMaxRounds(preset.maxRounds);
+      setConsensusThreshold(preset.consensusThreshold);
+      setEnableSearch(preset.enableSearch || false);
+
+      // Set selected models
+      const modelSelections: ModelSelection[] = resolved.selectedModels.map((m, i) => ({
+        id: `model-${i + 1}`,
+        provider: m.provider,
+        modelId: m.id,
+        label: m.shortName,
+      }));
+      setSelectedModels(modelSelections);
+
+      // Set evaluator model
+      if (resolved.evaluatorModel) {
+        setEvaluatorModel(resolved.evaluatorModel.id);
+      }
+
+      // Update preset state
+      setSelectedPresetId(presetId);
+      setPresetModelIds(modelSelections.map(m => m.modelId));
+
+      // Collapse settings panel after applying preset
+      setSettingsExpanded(false);
+
+      // Track preset selection
+      posthog.capture("preset_selected", {
+        preset_id: presetId,
+        preset_name: preset.name,
+        model_count: preset.modelCount,
+        selected_models: modelSelections.map(m => m.modelId),
+        evaluator_model: resolved.evaluatorModel?.id,
+      });
+    } catch (error) {
+      console.error("Failed to apply preset:", error);
+      toast.error("Could not apply preset", {
+        description: "Not enough models available for this preset.",
+      });
+    }
+  }, [models]);
+
+  // Initialize with balanced preset on first load (only if no saved preferences)
+  useEffect(() => {
+    if (models.length === 0 || selectedModels.length > 0) return;
+
+    // Check if user has saved preferences
+    try {
+      const stored = localStorage.getItem("consensusPreferences");
+      if (stored) {
+        const prefs = JSON.parse(stored);
+        if (prefs.models && prefs.models.length >= 2) {
+          // User has saved preferences, skip preset initialization
+          return;
+        }
+      }
+    } catch {
+      // If localStorage fails, continue with preset
+    }
+
+    // Apply balanced preset by default
+    applyPreset("balanced");
+  }, [models, selectedModels.length, applyPreset]);
 
   // Initialize default models when models are loaded (only if no saved preferences)
   useEffect(() => {
@@ -231,6 +337,24 @@ export default function ConsensusPage() {
       }
     }
   }, [models, evaluatorModel]);
+
+  // Restore selectedPresetId and presetModelIds from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("consensusPreferences");
+      if (stored) {
+        const prefs = JSON.parse(stored);
+        if (prefs.activePreset) {
+          setSelectedPresetId(prefs.activePreset);
+        }
+        if (prefs.presetModelIds) {
+          setPresetModelIds(prefs.presetModelIds);
+        }
+      }
+    } catch {
+      // If localStorage fails, leave preset state as null
+    }
+  }, []);
 
   // Auto-scroll: Trigger scroll when scrollTrigger increments
   useEffect(() => {
@@ -778,7 +902,7 @@ export default function ConsensusPage() {
           />
         </div>
 
-        {/* Settings Panel */}
+        {/* Settings Panel (includes Preset Selector) */}
         {models.length > 0 && (
           <div className="mx-auto w-full max-w-4xl">
             <SettingsPanel
@@ -800,6 +924,9 @@ export default function ConsensusPage() {
               openRouterModels={models}
               openRouterGroupedModels={groupedModels}
               openRouterLoading={modelsLoading}
+              activePreset={activePreset}
+              presetModelIds={presetModelIds}
+              onPresetSelect={applyPreset}
             />
           </div>
         )}

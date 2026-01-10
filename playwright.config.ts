@@ -32,23 +32,23 @@ export default defineConfig({
     navigationTimeout: 10000,
   },
   projects: [
-    // Setup project - authenticates once and saves state
-    {
-      name: "setup",
-      testMatch: /.*\.setup\.ts/,
-    },
-    // Unauthenticated tests - run after setup
+    // Unauthenticated tests - run first, no auth needed
     {
       name: "unauthenticated",
       testMatch: /\/auth\.spec\.ts$/,
-      dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"] },
     },
-    // Authenticated tests - run after unauthenticated with saved auth state
+    // Auth setup project - authenticates and saves state, runs after unauthenticated
+    {
+      name: "auth-setup",
+      testMatch: /.*\.setup\.ts/,
+      dependencies: ["unauthenticated"],
+    },
+    // Authenticated tests - run after auth setup with saved auth state
     {
       name: "authenticated",
       testMatch: /\/(consensus|settings|error-handling)\.spec\.ts$/,
-      dependencies: ["unauthenticated"],
+      dependencies: ["auth-setup"],
       use: {
         ...devices["Desktop Chrome"],
         storageState: "playwright/.auth/user.json",
