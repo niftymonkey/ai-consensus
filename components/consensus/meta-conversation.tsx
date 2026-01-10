@@ -126,6 +126,64 @@ export function MetaConversation({ rounds, selectedModels, consensusThreshold }:
               </AccordionTrigger>
 
               <AccordionContent className="space-y-6 pt-4">
+                {/* Model Responses - Collapsible (placed before evaluation so streaming eval doesn't push it down) */}
+                <Accordion
+                  type="single"
+                  collapsible
+                  value={expandedSections.modelResponses ? "responses" : ""}
+                  onValueChange={(value) => setExpandedSections(prev => ({
+                    ...prev,
+                    modelResponses: value === "responses"
+                  }))}
+                >
+                  <AccordionItem value="responses" className="border-none">
+                    <AccordionTrigger className="text-sm hover:no-underline">
+                      <span className="flex items-center gap-2">💬 Individual Model Responses</span>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <Tabs defaultValue={selectedModels[0]?.id} className="w-full">
+                        <TabsList className="w-full">
+                          {selectedModels.map((model) => (
+                            <TabsTrigger key={model.id} value={model.id} className="flex-1">
+                              {model.label}
+                            </TabsTrigger>
+                          ))}
+                        </TabsList>
+                        {selectedModels.map((model) => (
+                          <TabsContent key={model.id} value={model.id} className="mt-4">
+                            <div className="p-4 bg-muted/30 rounded-lg max-h-[400px] overflow-y-auto">
+                              <div className="prose prose-sm dark:prose-invert max-w-none">
+                                <ReactMarkdown
+                                  remarkPlugins={[remarkGfm]}
+                                  components={{
+                                    p: ({ node, ...props }) => (
+                                      <p className="mb-4 leading-relaxed" {...props} />
+                                    ),
+                                    ul: ({ node, ...props }) => (
+                                      <ul className="mb-4 ml-6 list-disc space-y-2" {...props} />
+                                    ),
+                                    ol: ({ node, ...props }) => (
+                                      <ol className="mb-4 ml-6 list-decimal space-y-2" {...props} />
+                                    ),
+                                    li: ({ node, ...props }) => (
+                                      <li className="leading-relaxed" {...props} />
+                                    ),
+                                    strong: ({ node, ...props }) => (
+                                      <strong className="font-bold" {...props} />
+                                    ),
+                                  }}
+                                >
+                                  {round.responses.get(model.id) || "No response"}
+                                </ReactMarkdown>
+                              </div>
+                            </div>
+                          </TabsContent>
+                        ))}
+                      </Tabs>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+
                 {/* Evaluation Section - FUN VERSION */}
                 <div className="space-y-4">
                   {/* Top Section: Compact Hero (left) + Differences (right) */}
@@ -236,59 +294,6 @@ export function MetaConversation({ rounds, selectedModels, consensusThreshold }:
                   )}
                 </div>
 
-                {/* Model Responses - Collapsible */}
-                <Accordion
-                  type="single"
-                  collapsible
-                  value={expandedSections.modelResponses ? "responses" : ""}
-                  onValueChange={(value) => setExpandedSections(prev => ({
-                    ...prev,
-                    modelResponses: value === "responses"
-                  }))}
-                >
-                  <AccordionItem value="responses" className="border-none">
-                    <AccordionTrigger className="text-sm hover:no-underline">
-                      <span className="flex items-center gap-2">
-                        💬 Model Responses
-                      </span>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <Tabs defaultValue={selectedModels[0]?.id} className="w-full">
-                        <TabsList className="w-full">
-                          {selectedModels.map((model) => (
-                            <TabsTrigger key={model.id} value={model.id} className="flex-1">
-                              {model.label}
-                            </TabsTrigger>
-                          ))}
-                        </TabsList>
-                        {selectedModels.map((model) => (
-                          <TabsContent key={model.id} value={model.id} className="mt-4">
-                            <div className="p-4 bg-muted/30 rounded-lg max-h-[500px] overflow-y-auto">
-                              <div className="markdown-content">
-                                <ReactMarkdown
-                                  remarkPlugins={[remarkGfm]}
-                                  components={{
-                                    p: ({ node, ...props }) => <p className="mb-4 leading-relaxed" {...props} />,
-                                    ul: ({ node, ...props }) => <ul className="mb-4 ml-6 list-disc space-y-2" {...props} />,
-                                    ol: ({ node, ...props }) => <ol className="mb-4 ml-6 list-decimal space-y-2" {...props} />,
-                                    li: ({ node, ...props }) => <li className="leading-relaxed" {...props} />,
-                                    h1: ({ node, ...props }) => <h1 className="mb-4 mt-6 text-2xl font-bold" {...props} />,
-                                    h2: ({ node, ...props }) => <h2 className="mb-3 mt-5 text-xl font-bold" {...props} />,
-                                    h3: ({ node, ...props }) => <h3 className="mb-3 mt-4 text-lg font-bold" {...props} />,
-                                    strong: ({ node, ...props }) => <strong className="font-bold" {...props} />,
-                                  }}
-                                >
-                                  {round.responses.get(model.id) || "No response"}
-                                </ReactMarkdown>
-                              </div>
-                            </div>
-                          </TabsContent>
-                        ))}
-                      </Tabs>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-
                 {/* Refinement Prompts - Collapsible */}
                 {round.refinementPrompts && (
                   <Accordion
@@ -315,10 +320,37 @@ export function MetaConversation({ rounds, selectedModels, consensusThreshold }:
                           </TabsList>
                           {selectedModels.map((model) => (
                             <TabsContent key={model.id} value={model.id} className="mt-4">
-                              <div className="p-4 bg-muted/30 rounded-lg">
-                                <pre className="text-xs whitespace-pre-wrap font-mono">
-                                  {round.refinementPrompts?.[model.id] || "No prompt"}
-                                </pre>
+                              <div className="p-4 bg-muted/30 rounded-lg max-h-[500px] overflow-y-auto">
+                                <div className="markdown-content text-sm">
+                                  <ReactMarkdown
+                                    remarkPlugins={[remarkGfm]}
+                                    components={{
+                                      p: ({ node, ...props }) => (
+                                        <p className="mb-3 leading-relaxed" {...props} />
+                                      ),
+                                      ul: ({ node, ...props }) => (
+                                        <ul className="mb-3 ml-6 list-disc space-y-1" {...props} />
+                                      ),
+                                      ol: ({ node, ...props }) => (
+                                        <ol className="mb-3 ml-6 list-decimal space-y-1" {...props} />
+                                      ),
+                                      li: ({ node, ...props }) => (
+                                        <li className="leading-relaxed" {...props} />
+                                      ),
+                                      h2: ({ node, ...props }) => (
+                                        <h2 className="mb-2 mt-4 text-base font-bold" {...props} />
+                                      ),
+                                      strong: ({ node, ...props }) => (
+                                        <strong className="font-semibold" {...props} />
+                                      ),
+                                      hr: ({ node, ...props }) => (
+                                        <hr className="my-4 border-border" {...props} />
+                                      ),
+                                    }}
+                                  >
+                                    {round.refinementPrompts?.[model.id] || "No prompt"}
+                                  </ReactMarkdown>
+                                </div>
                               </div>
                             </TabsContent>
                           ))}

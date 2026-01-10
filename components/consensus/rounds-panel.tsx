@@ -313,6 +313,107 @@ export function RoundsPanel({
                   </div>
                 )}
 
+                {/* Model Responses - Collapsible (placed before evaluation so streaming eval doesn't push it down) */}
+                <Accordion
+                  type="single"
+                  collapsible
+                  value={expandedSections.modelResponses ? "responses" : ""}
+                  onValueChange={(value) => {
+                    onUserInteraction?.();
+                    setExpandedSections(prev => ({
+                      ...prev,
+                      modelResponses: value === "responses"
+                    }));
+                  }}
+                >
+                  <AccordionItem value="responses">
+                    <AccordionTrigger className="text-sm hover:no-underline">
+                      <span className="flex items-center gap-2 flex-wrap">
+                        {selectedModels.map((model) => {
+                          const hasResponse = round.responses.get(model.id);
+                          // Model is done if: round is in rounds array, synthesis started, OR this model completed
+                          const isModelDone = rounds.some(r => r.roundNumber === round.roundNumber) || isSynthesizing || completedModels.has(model.id);
+                          // Status icon: Check (done), Loader2 spinning (streaming), Clock (waiting)
+                          let StatusIcon;
+                          const iconClass = "h-3 w-3";
+                          if (isModelDone && hasResponse) {
+                            StatusIcon = <Check className={`${iconClass} text-green-500`} />;
+                          } else if (hasResponse) {
+                            // Actively streaming
+                            StatusIcon = <Download className={`${iconClass} animate-pulse text-blue-500`} />;
+                          } else {
+                            // Waiting for response to start
+                            StatusIcon = <Clock className={`${iconClass} text-muted-foreground`} />;
+                          }
+                          const isActive = selectedModelTab === model.id;
+                          return (
+                            <span
+                              key={model.id}
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // Open accordion and switch to this model's tab
+                                setExpandedSections(prev => ({ ...prev, modelResponses: true }));
+                                setSelectedModelTab(model.id);
+                                onUserInteraction?.();
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.stopPropagation();
+                                  setExpandedSections(prev => ({ ...prev, modelResponses: true }));
+                                  setSelectedModelTab(model.id);
+                                  onUserInteraction?.();
+                                }
+                              }}
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium hover:opacity-80 transition-all cursor-pointer ${getProviderColor(model.provider)} ${isActive ? "border-2 saturate-150" : "border"}`}
+                            >
+                              {model.label} {StatusIcon}
+                            </span>
+                          );
+                        })}
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="p-4 bg-muted/30 rounded-lg max-h-[500px] overflow-y-auto">
+                        <div className="markdown-content">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              p: ({ node, ...props }) => (
+                                <p className="mb-4 leading-relaxed" {...props} />
+                              ),
+                              ul: ({ node, ...props }) => (
+                                <ul className="mb-4 ml-6 list-disc space-y-2" {...props} />
+                              ),
+                              ol: ({ node, ...props }) => (
+                                <ol className="mb-4 ml-6 list-decimal space-y-2" {...props} />
+                              ),
+                              li: ({ node, ...props }) => (
+                                <li className="leading-relaxed" {...props} />
+                              ),
+                              h1: ({ node, ...props }) => (
+                                <h1 className="mb-4 mt-6 text-2xl font-bold" {...props} />
+                              ),
+                              h2: ({ node, ...props }) => (
+                                <h2 className="mb-3 mt-5 text-xl font-bold" {...props} />
+                              ),
+                              h3: ({ node, ...props }) => (
+                                <h3 className="mb-3 mt-4 text-lg font-bold" {...props} />
+                              ),
+                              strong: ({ node, ...props }) => (
+                                <strong className="font-bold" {...props} />
+                              ),
+                            }}
+                          >
+                            {round.responses.get(selectedModelTab) || "No response"}
+                          </ReactMarkdown>
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+
                 {/* Evaluation Section - FUN VERSION (only show if we have evaluation data) */}
                 {round.evaluation && round.evaluation.score !== undefined && round.evaluation.score !== null && (
                   <div className="space-y-4">
@@ -426,107 +527,6 @@ export function RoundsPanel({
                   </div>
                 )}
 
-                {/* Model Responses - Collapsible */}
-                <Accordion
-                  type="single"
-                  collapsible
-                  value={expandedSections.modelResponses ? "responses" : ""}
-                  onValueChange={(value) => {
-                    onUserInteraction?.();
-                    setExpandedSections(prev => ({
-                      ...prev,
-                      modelResponses: value === "responses"
-                    }));
-                  }}
-                >
-                  <AccordionItem value="responses">
-                    <AccordionTrigger className="text-sm hover:no-underline">
-                      <span className="flex items-center gap-2 flex-wrap">
-                        {selectedModels.map((model) => {
-                          const hasResponse = round.responses.get(model.id);
-                          // Model is done if: round is in rounds array, synthesis started, OR this model completed
-                          const isModelDone = rounds.some(r => r.roundNumber === round.roundNumber) || isSynthesizing || completedModels.has(model.id);
-                          // Status icon: Check (done), Loader2 spinning (streaming), Clock (waiting)
-                          let StatusIcon;
-                          const iconClass = "h-3 w-3";
-                          if (isModelDone && hasResponse) {
-                            StatusIcon = <Check className={`${iconClass} text-green-500`} />;
-                          } else if (hasResponse) {
-                            // Actively streaming
-                            StatusIcon = <Download className={`${iconClass} animate-pulse text-blue-500`} />;
-                          } else {
-                            // Waiting for response to start
-                            StatusIcon = <Clock className={`${iconClass} text-muted-foreground`} />;
-                          }
-                          const isActive = selectedModelTab === model.id;
-                          return (
-                            <span
-                              key={model.id}
-                              role="button"
-                              tabIndex={0}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                // Open accordion and switch to this model's tab
-                                setExpandedSections(prev => ({ ...prev, modelResponses: true }));
-                                setSelectedModelTab(model.id);
-                                onUserInteraction?.();
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.stopPropagation();
-                                  setExpandedSections(prev => ({ ...prev, modelResponses: true }));
-                                  setSelectedModelTab(model.id);
-                                  onUserInteraction?.();
-                                }
-                              }}
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium hover:opacity-80 transition-all cursor-pointer ${getProviderColor(model.provider)} ${isActive ? "border-2 saturate-150" : "border"}`}
-                            >
-                              {model.label} {StatusIcon}
-                            </span>
-                          );
-                        })}
-                      </span>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="p-4 bg-muted/30 rounded-lg max-h-[500px] overflow-y-auto">
-                        <div className="markdown-content">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                              p: ({ node, ...props }) => (
-                                <p className="mb-4 leading-relaxed" {...props} />
-                              ),
-                              ul: ({ node, ...props }) => (
-                                <ul className="mb-4 ml-6 list-disc space-y-2" {...props} />
-                              ),
-                              ol: ({ node, ...props }) => (
-                                <ol className="mb-4 ml-6 list-decimal space-y-2" {...props} />
-                              ),
-                              li: ({ node, ...props }) => (
-                                <li className="leading-relaxed" {...props} />
-                              ),
-                              h1: ({ node, ...props }) => (
-                                <h1 className="mb-4 mt-6 text-2xl font-bold" {...props} />
-                              ),
-                              h2: ({ node, ...props }) => (
-                                <h2 className="mb-3 mt-5 text-xl font-bold" {...props} />
-                              ),
-                              h3: ({ node, ...props }) => (
-                                <h3 className="mb-3 mt-4 text-lg font-bold" {...props} />
-                              ),
-                              strong: ({ node, ...props }) => (
-                                <strong className="font-bold" {...props} />
-                              ),
-                            }}
-                          >
-                            {round.responses.get(selectedModelTab) || "No response"}
-                          </ReactMarkdown>
-                        </div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-
                 {/* Refinement Prompts - Collapsible */}
                 {round.refinementPrompts && (
                   <Accordion
@@ -559,10 +559,37 @@ export function RoundsPanel({
                           </TabsList>
                           {selectedModels.map((model) => (
                             <TabsContent key={model.id} value={model.id} className="mt-4">
-                              <div className="p-4 bg-muted/30 rounded-lg">
-                                <pre className="text-xs whitespace-pre-wrap font-mono">
-                                  {round.refinementPrompts?.[model.id] || "No prompt"}
-                                </pre>
+                              <div className="p-4 bg-muted/30 rounded-lg max-h-[500px] overflow-y-auto">
+                                <div className="markdown-content text-sm">
+                                  <ReactMarkdown
+                                    remarkPlugins={[remarkGfm]}
+                                    components={{
+                                      p: ({ node, ...props }) => (
+                                        <p className="mb-3 leading-relaxed" {...props} />
+                                      ),
+                                      ul: ({ node, ...props }) => (
+                                        <ul className="mb-3 ml-6 list-disc space-y-1" {...props} />
+                                      ),
+                                      ol: ({ node, ...props }) => (
+                                        <ol className="mb-3 ml-6 list-decimal space-y-1" {...props} />
+                                      ),
+                                      li: ({ node, ...props }) => (
+                                        <li className="leading-relaxed" {...props} />
+                                      ),
+                                      h2: ({ node, ...props }) => (
+                                        <h2 className="mb-2 mt-4 text-base font-bold" {...props} />
+                                      ),
+                                      strong: ({ node, ...props }) => (
+                                        <strong className="font-semibold" {...props} />
+                                      ),
+                                      hr: ({ node, ...props }) => (
+                                        <hr className="my-4 border-border" {...props} />
+                                      ),
+                                    }}
+                                  >
+                                    {round.refinementPrompts?.[model.id] || "No prompt"}
+                                  </ReactMarkdown>
+                                </div>
                               </div>
                             </TabsContent>
                           ))}
