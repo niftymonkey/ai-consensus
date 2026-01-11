@@ -75,7 +75,7 @@ export function AutoScrollToggle({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="left" className="max-w-xs">
-            <p className="text-xs text-primary-foreground/80">
+            <p className="text-xs">
               {enabled
                 ? "Following new content automatically"
                 : "Click to resume and scroll to current content"}
