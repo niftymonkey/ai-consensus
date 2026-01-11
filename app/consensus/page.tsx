@@ -914,16 +914,16 @@ export default function ConsensusPage() {
       {/* Floating Status Indicator */}
       {overallStatus && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 w-full max-w-md px-4">
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-6 py-3 shadow-lg dark:border-blue-900 dark:bg-blue-950/95 backdrop-blur-sm">
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-accent px-6 py-3 shadow-lg">
             <div className="flex items-center gap-3">
-              <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" />
-              <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+              <Loader2 className="h-5 w-5 animate-spin text-accent-foreground" />
+              <span className="text-sm font-medium text-accent-foreground">
                 {overallStatus}
               </span>
             </div>
             <button
               onClick={handleCancel}
-              className="text-sm font-medium text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-100 transition-colors"
+              className="text-sm font-medium text-accent-foreground/70 hover:text-accent-foreground transition-colors"
             >
               Cancel
             </button>

@@ -60,7 +60,7 @@ export function PresetSelector({
                       "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
                       "disabled:opacity-50 disabled:cursor-not-allowed",
                       isActive
-                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                        ? "bg-primary text-primary-foreground border-primary shadow-sm hover:bg-primary/80 active:bg-primary/60"
                         : "bg-background hover:bg-muted border-border hover:border-muted-foreground/30"
                     )}
                   >
@@ -71,11 +71,10 @@ export function PresetSelector({
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="max-w-xs">
-                  <p className="font-medium">{preset.name}</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs">
                     {preset.description}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs mt-1">
                     {preset.modelCount} models, {preset.maxRounds} rounds, {preset.consensusThreshold}% threshold
                     {preset.enableSearch && ", web search"}
                   </p>
