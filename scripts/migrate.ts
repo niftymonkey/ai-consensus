@@ -2,7 +2,11 @@
 /**
  * Database Migration Script
  *
- * Usage: pnpm tsx scripts/migrate.ts
+ * Usage: pnpm migrate [migration-file]
+ *
+ * Examples:
+ *   pnpm migrate                                    # Runs 001_add_consensus_tables.sql
+ *   pnpm migrate 002_add_trial_usage_table.sql     # Runs specific migration
  *
  * This script applies database migrations to your Vercel Postgres database.
  */
@@ -16,7 +20,10 @@ import * as path from "path";
 config({ path: path.join(process.cwd(), ".env.local") });
 
 async function runMigration() {
-  console.log("🔄 Starting database migration...\n");
+  // Get migration file from command line args, default to 001
+  const migrationFile = process.argv[2] || "001_add_consensus_tables.sql";
+
+  console.log(`🔄 Starting database migration: ${migrationFile}\n`);
 
   // Verify connection string is available
   if (!process.env.POSTGRES_URL) {
@@ -27,7 +34,16 @@ async function runMigration() {
 
   try {
     // Read the migration file
-    const migrationPath = path.join(process.cwd(), "migrations", "001_add_consensus_tables.sql");
+    const migrationPath = path.join(process.cwd(), "migrations", migrationFile);
+
+    if (!fs.existsSync(migrationPath)) {
+      console.error(`❌ Error: Migration file not found: ${migrationPath}`);
+      console.error("\nAvailable migrations:");
+      const migrations = fs.readdirSync(path.join(process.cwd(), "migrations"));
+      migrations.filter(f => f.endsWith(".sql")).forEach(f => console.log(`  - ${f}`));
+      process.exit(1);
+    }
+
     const migrationSQL = fs.readFileSync(migrationPath, "utf-8");
 
     // Split by semicolons and filter out comments and empty statements

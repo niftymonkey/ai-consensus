@@ -8,6 +8,7 @@
 import { describe, it, expect } from "vitest";
 import {
   filterAvailableModels,
+  filterEvaluatorModels,
   validateModelSelections,
   type Model,
   type ModelSelection,
@@ -231,6 +232,101 @@ describe("validateModelSelections", () => {
       const result = validateModelSelections(selections, available);
       expect(result[0].id).toBe("model-2");
       expect(result[1].id).toBe("model-1");
+    });
+  });
+});
+
+describe("filterEvaluatorModels", () => {
+  // Trial models - all "efficient tier" (mini/flash/small/haiku)
+  const trialModels: Model[] = [
+    { id: "openai/gpt-4o-mini", provider: "openai", name: "GPT-4o-mini" },
+    { id: "anthropic/claude-3.5-haiku", provider: "anthropic", name: "Claude 3.5 Haiku" },
+    { id: "google/gemini-2.0-flash-001", provider: "google", name: "Gemini 2.0 Flash" },
+    { id: "meta-llama/llama-3.1-8b-instruct", provider: "meta-llama", name: "Llama 3.1 8B Instruct" },
+    { id: "mistralai/mistral-small-24b-instruct-2501", provider: "mistralai", name: "Mistral Small 24B" },
+  ];
+
+  // Mix of efficient and capable models
+  const mixedModels: Model[] = [
+    { id: "openai/gpt-4o", provider: "openai", name: "GPT-4o" },
+    { id: "openai/gpt-4o-mini", provider: "openai", name: "GPT-4o-mini" },
+    { id: "anthropic/claude-3.7-sonnet", provider: "anthropic", name: "Claude 3.7 Sonnet" },
+    { id: "anthropic/claude-3.5-haiku", provider: "anthropic", name: "Claude 3.5 Haiku" },
+    { id: "google/gemini-2.5-pro", provider: "google", name: "Gemini 2.5 Pro" },
+    { id: "google/gemini-2.0-flash-001", provider: "google", name: "Gemini 2.0 Flash" },
+    { id: "meta-llama/llama-3.3-70b-instruct", provider: "meta-llama", name: "Llama 3.3 70B Instruct" },
+  ];
+
+  describe("in normal mode (isTrialMode = false)", () => {
+    it("filters out mini models", () => {
+      const result = filterEvaluatorModels(mixedModels, false);
+      expect(result.find(m => m.id === "openai/gpt-4o-mini")).toBeUndefined();
+    });
+
+    it("filters out flash models", () => {
+      const result = filterEvaluatorModels(mixedModels, false);
+      expect(result.find(m => m.id === "google/gemini-2.0-flash-001")).toBeUndefined();
+    });
+
+    it("filters out haiku models", () => {
+      const result = filterEvaluatorModels(mixedModels, false);
+      expect(result.find(m => m.id === "anthropic/claude-3.5-haiku")).toBeUndefined();
+    });
+
+    it("keeps capable models", () => {
+      const result = filterEvaluatorModels(mixedModels, false);
+      expect(result.find(m => m.id === "openai/gpt-4o")).toBeDefined();
+      expect(result.find(m => m.id === "anthropic/claude-3.7-sonnet")).toBeDefined();
+      expect(result.find(m => m.id === "google/gemini-2.5-pro")).toBeDefined();
+      expect(result.find(m => m.id === "meta-llama/llama-3.3-70b-instruct")).toBeDefined();
+    });
+
+    it("returns fewer models than input for mixed models", () => {
+      const result = filterEvaluatorModels(mixedModels, false);
+      expect(result.length).toBeLessThan(mixedModels.length);
+      expect(result.length).toBe(4); // Only the capable models
+    });
+  });
+
+  describe("in trial mode (isTrialMode = true)", () => {
+    it("returns all models without filtering", () => {
+      const result = filterEvaluatorModels(trialModels, true);
+      expect(result.length).toBe(trialModels.length);
+    });
+
+    it("includes mini models", () => {
+      const result = filterEvaluatorModels(trialModels, true);
+      expect(result.find(m => m.id === "openai/gpt-4o-mini")).toBeDefined();
+    });
+
+    it("includes flash models", () => {
+      const result = filterEvaluatorModels(trialModels, true);
+      expect(result.find(m => m.id === "google/gemini-2.0-flash-001")).toBeDefined();
+    });
+
+    it("includes small models", () => {
+      const result = filterEvaluatorModels(trialModels, true);
+      expect(result.find(m => m.id === "mistralai/mistral-small-24b-instruct-2501")).toBeDefined();
+    });
+
+    it("includes haiku models", () => {
+      const result = filterEvaluatorModels(trialModels, true);
+      expect(result.find(m => m.id === "anthropic/claude-3.5-haiku")).toBeDefined();
+    });
+  });
+
+  describe("edge cases", () => {
+    it("handles empty model list", () => {
+      expect(filterEvaluatorModels([], false)).toHaveLength(0);
+      expect(filterEvaluatorModels([], true)).toHaveLength(0);
+    });
+
+    it("preserves model order", () => {
+      const result = filterEvaluatorModels(mixedModels, false);
+      // GPT-4o should come before Claude Sonnet (based on input order)
+      const gpt4oIndex = result.findIndex(m => m.id === "openai/gpt-4o");
+      const claudeIndex = result.findIndex(m => m.id === "anthropic/claude-3.7-sonnet");
+      expect(gpt4oIndex).toBeLessThan(claudeIndex);
     });
   });
 });

@@ -54,6 +54,9 @@ export function isTrialEnabled(): boolean {
 export const TRIAL_ALLOWED_MODELS = [
   "openai/gpt-4o-mini", // ~$0.15/1M input, $0.60/1M output
   "anthropic/claude-3.5-haiku", // ~$0.80/1M input, $4/1M output
+  "google/gemini-2.0-flash-001", // ~$0.10/1M input, $0.40/1M output
+  "meta-llama/llama-3.1-8b-instruct", // ~$0.05/1M input, $0.05/1M output
+  "mistralai/mistral-small-24b-instruct-2501", // ~$0.10/1M input, $0.30/1M output
 ] as const;
 
 export type TrialAllowedModel = (typeof TRIAL_ALLOWED_MODELS)[number];

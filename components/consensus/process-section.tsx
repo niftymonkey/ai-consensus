@@ -14,6 +14,7 @@ interface ProcessSectionProps {
   setEnableSearch: (value: boolean) => void;
   hasTavilyKey: boolean;
   disabled?: boolean;
+  maxRoundsLimit?: number;
 }
 
 export function ProcessSection({
@@ -25,6 +26,7 @@ export function ProcessSection({
   setEnableSearch,
   hasTavilyKey,
   disabled = false,
+  maxRoundsLimit = 10,
 }: ProcessSectionProps) {
   return (
     <div className="space-y-2">
@@ -40,16 +42,47 @@ export function ProcessSection({
               <Label htmlFor="max-rounds">Maximum Rounds</Label>
               <span className="text-sm font-medium">{maxRounds}</span>
             </div>
-            <Slider
-              id="max-rounds"
-              min={1}
-              max={10}
-              step={1}
-              value={[maxRounds]}
-              onValueChange={([value]) => setMaxRounds(value)}
-              disabled={disabled}
-              className="w-full"
-            />
+            <div className="relative">
+              <Slider
+                id="max-rounds"
+                min={1}
+                max={10}
+                step={1}
+                value={[Math.min(maxRounds, maxRoundsLimit)]}
+                onValueChange={([value]) => setMaxRounds(Math.min(value, maxRoundsLimit))}
+                disabled={disabled}
+                className="w-full"
+              />
+              {/* Restricted zone overlay for trial mode */}
+              {maxRoundsLimit < 10 && (
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 h-1.5 rounded-r-full bg-muted-foreground/20 pointer-events-none"
+                  style={{
+                    left: `calc(${((maxRoundsLimit - 1) / 9) * 100}% + 16px)`,
+                    right: 0,
+                  }}
+                >
+                  {/* Diagonal stripes pattern */}
+                  <div
+                    className="absolute inset-0 rounded-r-full opacity-40"
+                    style={{
+                      backgroundImage: `repeating-linear-gradient(
+                        -45deg,
+                        transparent,
+                        transparent 2px,
+                        currentColor 2px,
+                        currentColor 4px
+                      )`,
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+            {maxRoundsLimit < 10 && (
+              <p className="text-xs text-muted-foreground">
+                Up to 10 with your own key
+              </p>
+            )}
           </div>
 
           {/* Vertical divider - only visible on md+ */}

@@ -7,6 +7,7 @@ import { ModelCombobox } from "@/components/ui/model-combobox";
 import type { ModelSelection } from "@/lib/types";
 import type { OpenRouterModelWithMeta } from "@/lib/openrouter-models";
 import { groupModelsByProvider, getRecommendedEvaluatorModels } from "@/lib/openrouter-models";
+import { filterEvaluatorModels } from "@/lib/model-filtering";
 
 interface ModelsSectionProps {
   models: OpenRouterModelWithMeta[];
@@ -17,6 +18,7 @@ interface ModelsSectionProps {
   setEvaluatorModel: (value: string) => void;
   disabled?: boolean;
   isLoading?: boolean;
+  isTrialMode?: boolean;
 }
 
 export function ModelsSection({
@@ -28,22 +30,12 @@ export function ModelsSection({
   setEvaluatorModel,
   disabled = false,
   isLoading = false,
+  isTrialMode = false,
 }: ModelsSectionProps) {
-  // Filter evaluator models (exclude nano/mini/lite/flash)
+  // Filter evaluator models - in trial mode, include all models
   const evaluatorModels = useMemo(() => {
-    return models.filter((m) => {
-      const lower = m.shortName.toLowerCase();
-      return (
-        !lower.includes("nano") &&
-        !lower.includes(" mini") &&
-        !lower.includes("-mini") &&
-        !lower.includes("lite") &&
-        !lower.includes("flash") &&
-        !lower.includes("tiny") &&
-        !lower.includes("small")
-      );
-    });
-  }, [models]);
+    return filterEvaluatorModels(models, isTrialMode);
+  }, [models, isTrialMode]);
 
   const groupedEvaluatorModels = useMemo(
     () => groupModelsByProvider(evaluatorModels),

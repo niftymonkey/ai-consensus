@@ -57,9 +57,6 @@ function getTrialDisabledReason(
   if (preset.modelCount > constraints.maxParticipants) {
     reasons.push(`${preset.modelCount} models (trial max: ${constraints.maxParticipants})`);
   }
-  if (preset.enableSearch && !constraints.allowsSearch) {
-    reasons.push("web search");
-  }
 
   if (reasons.length === 0) return null;
   return `Requires ${reasons.join(", ")}`;
@@ -127,7 +124,7 @@ export function PresetSelector({
                   </p>
                   {isTrialDisabled && (
                     <p className="text-xs mt-2 text-amber-600 dark:text-amber-400 font-medium">
-                      {trialDisabledReason} - Add API key to unlock
+                      {trialDisabledReason}
                     </p>
                   )}
                 </TooltipContent>

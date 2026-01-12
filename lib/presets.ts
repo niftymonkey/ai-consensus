@@ -52,7 +52,7 @@ export const PRESETS: Record<PresetId, PresetDefinition> = {
   balanced: {
     id: "balanced",
     name: "Balanced",
-    description: "Thoughtful analysis with diverse perspectives",
+    description: "Diverse models for thoughtful analysis",
     icon: "Scale",
     purpose: "balanced",
     modelCount: 3,
@@ -73,7 +73,7 @@ export const PRESETS: Record<PresetId, PresetDefinition> = {
   coding: {
     id: "coding",
     name: "Coding",
-    description: "Technical analysis for code and architecture",
+    description: "Code-focused models for technical analysis",
     icon: "Code",
     purpose: "coding",
     modelCount: 2,

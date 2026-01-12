@@ -19,6 +19,7 @@ interface PromptSuggestionsProps {
   onSelect: (prompt: string, preset: PresetId) => void;
   disabled?: boolean;
   show?: boolean;
+  isTrialMode?: boolean;
 }
 
 // Map each suggestion to its ideal preset
@@ -32,7 +33,7 @@ export const PROMPT_SUGGESTIONS = SUGGESTION_CONFIGS.map(s => s.prompt);
 
 const STORAGE_KEY = "usedPromptSuggestions";
 
-export function PromptSuggestions({ onSelect, disabled, show = true }: PromptSuggestionsProps) {
+export function PromptSuggestions({ onSelect, disabled, show = true, isTrialMode = false }: PromptSuggestionsProps) {
   const [usedSuggestions, setUsedSuggestions] = useState<Set<string>>(new Set());
 
   // Load used suggestions from localStorage on mount
@@ -94,7 +95,9 @@ export function PromptSuggestions({ onSelect, disabled, show = true }: PromptSug
                 </button>
               </TooltipTrigger>
               <TooltipContent>
-                Uses {presetName} preset
+                {isTrialMode && config.preset !== "casual"
+                  ? `Normally uses ${presetName} preset`
+                  : `Uses ${presetName} preset`}
               </TooltipContent>
             </Tooltip>
           );

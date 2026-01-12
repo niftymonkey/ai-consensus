@@ -49,6 +49,12 @@ interface ConsensusPreferences {
   lastUpdated: number;
 }
 
+interface TrialConstraints {
+  maxRounds: number;
+  maxParticipants: number;
+  allowsSearch: boolean;
+}
+
 interface SettingsPanelProps {
   availableKeys: AvailableKeys;
   selectedModels: ModelSelection[];
@@ -71,6 +77,7 @@ interface SettingsPanelProps {
   activePreset: PresetId | null;
   presetModelIds: string[];
   onPresetSelect: (presetId: PresetId) => void;
+  trialConstraints?: TrialConstraints | null;
 }
 
 const STORAGE_KEY = "consensusPreferences";
@@ -97,6 +104,7 @@ export function SettingsPanel({
   activePreset,
   presetModelIds,
   onPresetSelect,
+  trialConstraints = null,
 }: SettingsPanelProps) {
   const [hasLoadedPreferences, setHasLoadedPreferences] = useState(false);
   const [skipNextSave, setSkipNextSave] = useState(false);
@@ -283,6 +291,7 @@ export function SettingsPanel({
           activePreset={activePreset}
           onPresetSelect={onPresetSelect}
           disabled={disabled}
+          trialConstraints={trialConstraints}
         />
 
         {/* Models Section */}
@@ -295,6 +304,7 @@ export function SettingsPanel({
           setEvaluatorModel={setEvaluatorModel}
           disabled={disabled}
           isLoading={openRouterLoading}
+          isTrialMode={trialConstraints !== null}
         />
 
         {/* Process Section */}
@@ -307,6 +317,7 @@ export function SettingsPanel({
           setEnableSearch={handleSearchToggle}
           hasTavilyKey={availableKeys.tavily}
           disabled={disabled}
+          maxRoundsLimit={trialConstraints?.maxRounds}
         />
       </CardContent>
     </Card>

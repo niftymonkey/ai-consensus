@@ -4,6 +4,7 @@ import { getApiKeys } from "@/lib/db";
 import { checkProviderAvailability } from "@/lib/provider-availability";
 import { fetchOpenRouterModels } from "@/lib/openrouter-models";
 import { filterAndMapModelsForDirectKeys } from "@/lib/model-availability";
+import { isTrialEnabled, TRIAL_ALLOWED_MODELS } from "@/lib/config/trial";
 
 export const runtime = "nodejs";
 
@@ -59,6 +60,33 @@ export async function GET() {
       tavily: !!keys.tavily,
       openrouter: !!keys.openrouter,
     };
+
+    // Check if user has any keys at all
+    const hasAnyKey = hasKeys.openrouter || hasKeys.anthropic || hasKeys.openai || hasKeys.google;
+
+    // If no keys but trial is enabled, return trial-allowed models
+    if (!hasAnyKey && isTrialEnabled()) {
+      const catalog = await fetchOpenRouterModels();
+      const trialModels = catalog.filter(model =>
+        TRIAL_ALLOWED_MODELS.includes(model.id as typeof TRIAL_ALLOWED_MODELS[number])
+      );
+
+      return NextResponse.json(
+        {
+          models: trialModels,
+          hasKeys,
+          providerModels: null,
+          errors: {},
+          trialMode: true,
+          timestamp: new Date().toISOString(),
+        },
+        {
+          headers: {
+            "Cache-Control": "no-store",
+          },
+        }
+      );
+    }
 
     // Get the full OpenRouter catalog for model metadata
     const catalog = await fetchOpenRouterModels();

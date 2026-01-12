@@ -11,6 +11,8 @@ import { DualView } from "@/components/consensus/dual-view";
 import { AutoScrollToggle } from "@/components/consensus/auto-scroll-toggle";
 import { useModels } from "@/hooks/use-models";
 import { useAutoScroll } from "@/hooks/use-auto-scroll";
+import { useTrialStatus } from "@/hooks/use-trial-status";
+import { TrialStatusBanner } from "@/components/trial";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { CustomErrorToast } from "@/components/ui/custom-error-toast";
@@ -22,6 +24,14 @@ import type {
   ConsensusStreamEvent,
   ConsensusEvaluation,
 } from "@/lib/types";
+
+const EMPTY_KEYS = {
+  anthropic: false,
+  openai: false,
+  google: false,
+  tavily: false,
+  openrouter: false,
+} as const;
 
 export default function ConsensusPage() {
   const [prompt, setPrompt] = useState("");
@@ -36,6 +46,9 @@ export default function ConsensusPage() {
     isLoading: modelsLoading,
     refetch,
   } = useModels();
+
+  // Trial status (for users without API keys)
+  const { status: trialStatus, isLoading: trialLoading, refetch: refetchTrial } = useTrialStatus();
 
   // Check for API key updates and refetch if needed
   useEffect(() => {
@@ -230,7 +243,7 @@ export default function ConsensusPage() {
     }
   }, [models, evaluatorModel]);
 
-  // Initialize with balanced preset on first load (only if no saved preferences)
+  // Initialize with appropriate preset on first load (only if no saved preferences)
   useEffect(() => {
     if (models.length === 0 || selectedModels.length > 0) return;
 
@@ -248,9 +261,11 @@ export default function ConsensusPage() {
       // If localStorage fails, continue with preset
     }
 
-    // Apply balanced preset by default
-    applyPreset("balanced");
-  }, [models, selectedModels.length, applyPreset]);
+    // In trial mode, use "casual" preset (within trial limits)
+    // Otherwise use "balanced" preset
+    const inTrialMode = !hasAnyKey && trialStatus?.enabled && (trialStatus?.runsRemaining ?? 0) > 0;
+    applyPreset(inTrialMode ? "casual" : "balanced");
+  }, [models, selectedModels.length, applyPreset, hasAnyKey, trialStatus]);
 
   // Initialize default models when models are loaded (only if no saved preferences)
   useEffect(() => {
@@ -323,6 +338,14 @@ export default function ConsensusPage() {
         // If localStorage fails, continue with defaults
       }
 
+      // In trial mode, prefer GPT-4o-mini (cheaper) as evaluator
+      const inTrialMode = !hasAnyKey && trialStatus?.enabled && (trialStatus?.runsRemaining ?? 0) > 0;
+      if (inTrialMode && models.length > 0) {
+        const gpt4oMini = models.find(m => m.id.includes("gpt-4o-mini"));
+        setEvaluatorModel(gpt4oMini?.id ?? models[0].id);
+        return;
+      }
+
       // Filter evaluation-suitable models (exclude nano/mini/lite/flash)
       const suitableModels = models.filter((m) => {
         const lower = m.name.toLowerCase();
@@ -352,9 +375,12 @@ export default function ConsensusPage() {
         setEvaluatorModel(claudeSonnet.id);
       } else if (suitableModels.length > 0) {
         setEvaluatorModel(suitableModels[0].id);
+      } else if (models.length > 0) {
+        // Fallback: use any available model
+        setEvaluatorModel(models[0].id);
       }
     }
-  }, [models, evaluatorModel]);
+  }, [models, evaluatorModel, hasAnyKey, trialStatus]);
 
   // Restore selectedPresetId and presetModelIds from localStorage on mount
   useEffect(() => {
@@ -886,7 +912,17 @@ export default function ConsensusPage() {
     ? (hasKeys.openrouter ? 3 : [hasKeys.anthropic, hasKeys.openai, hasKeys.google].filter(Boolean).length)
     : 0;
 
-  if (modelsLoading) {
+  // Determine if user is in trial mode (no keys but trial available)
+  const isTrialMode = !hasAnyKey && trialStatus?.enabled && (trialStatus?.runsRemaining ?? 0) > 0;
+
+  // Build trial constraints for PresetSelector when in trial mode
+  const trialConstraints = isTrialMode && trialStatus?.constraints ? {
+    maxRounds: trialStatus.constraints.maxRounds,
+    maxParticipants: trialStatus.constraints.maxParticipants,
+    allowsSearch: false, // Trial doesn't support search
+  } : null;
+
+  if (modelsLoading || trialLoading) {
     return (
       <div className="container py-4 md:py-8 px-2 md:px-4">
         <div className="flex min-h-[400px] items-center justify-center">
@@ -896,7 +932,8 @@ export default function ConsensusPage() {
     );
   }
 
-  if (!hasAnyKey) {
+  // No keys and no trial available - show upgrade prompt
+  if (!hasAnyKey && !isTrialMode) {
     return (
       <div className="container py-4 md:py-12 px-2 md:px-4">
         <div className="space-y-6">
@@ -933,6 +970,13 @@ export default function ConsensusPage() {
 
       <div className="space-y-3">
 
+        {/* Trial Status Banner */}
+        {isTrialMode && (
+          <div className="mx-auto w-full max-w-4xl">
+            <TrialStatusBanner />
+          </div>
+        )}
+
         {/* Input */}
         <div className="mx-auto w-full max-w-4xl">
           <ConsensusInput
@@ -944,6 +988,7 @@ export default function ConsensusPage() {
             onPresetSelect={applyPreset}
             onSubmitWithPreset={handleSubmitWithPreset}
             showSuggestions={!finalConsensus}
+            isTrialMode={isTrialMode}
           />
         </div>
 
@@ -951,7 +996,7 @@ export default function ConsensusPage() {
         {models.length > 0 && (
           <div className="mx-auto w-full max-w-4xl">
             <SettingsPanel
-              availableKeys={hasKeys!}
+              availableKeys={hasKeys ?? EMPTY_KEYS}
               selectedModels={selectedModels}
               setSelectedModels={setSelectedModels}
               maxRounds={maxRounds}
@@ -972,6 +1017,7 @@ export default function ConsensusPage() {
               activePreset={activePreset}
               presetModelIds={presetModelIds}
               onPresetSelect={applyPreset}
+              trialConstraints={trialConstraints}
             />
           </div>
         )}

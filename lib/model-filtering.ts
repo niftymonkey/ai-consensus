@@ -70,3 +70,41 @@ export function validateModelSelections(
   const availableIds = new Set(available.map((m) => m.id));
   return selections.filter((selection) => availableIds.has(selection.modelId));
 }
+
+/**
+ * Filter models suitable for use as evaluator.
+ *
+ * In normal mode, filters out "efficient tier" models (mini/flash/small/haiku/etc.)
+ * since these are generally not ideal for the complex task of evaluation.
+ *
+ * In trial mode, returns all models unfiltered since only efficient tier
+ * models are available and we need to use one of them.
+ *
+ * @param models - Full list of available models
+ * @param isTrialMode - If true, skip filtering (trial mode)
+ * @returns Models suitable for evaluation
+ */
+export function filterEvaluatorModels<T extends Model>(
+  models: T[],
+  isTrialMode: boolean
+): T[] {
+  // In trial mode, all models are efficient tier - return them all
+  if (isTrialMode) {
+    return models;
+  }
+
+  // In normal mode, filter out efficient tier models
+  return models.filter((m) => {
+    const lower = m.name.toLowerCase();
+    return (
+      !lower.includes("nano") &&
+      !lower.includes(" mini") &&
+      !lower.includes("-mini") &&
+      !lower.includes("lite") &&
+      !lower.includes("flash") &&
+      !lower.includes("tiny") &&
+      !lower.includes("small") &&
+      !lower.includes("haiku")
+    );
+  });
+}

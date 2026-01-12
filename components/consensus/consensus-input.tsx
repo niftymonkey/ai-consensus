@@ -14,9 +14,10 @@ interface ConsensusInputProps {
   onPresetSelect?: (presetId: PresetId) => void;
   onSubmitWithPreset?: (prompt: string, presetId: PresetId) => void;
   showSuggestions?: boolean;
+  isTrialMode?: boolean;
 }
 
-export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmitWithPrompt, onPresetSelect, onSubmitWithPreset, showSuggestions = false }: ConsensusInputProps) {
+export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmitWithPrompt, onPresetSelect, onSubmitWithPreset, showSuggestions = false, isTrialMode = false }: ConsensusInputProps) {
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -64,6 +65,7 @@ export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmi
               onSelect={handleSuggestionSelect}
               disabled={isLoading}
               show={!prompt.trim()}
+              isTrialMode={isTrialMode}
             />
           )}
           <div className="flex items-center justify-between">
