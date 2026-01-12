@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { TrialUpgradeCard } from "@/components/trial";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -124,6 +125,9 @@ export default function SettingsPage() {
     <div className="container py-12">
       <div className="mx-auto max-w-4xl space-y-3">
         <SettingsHeader />
+
+        {/* Trial Upgrade Messaging (only shown to trial users) */}
+        <TrialUpgradeCard />
 
         {/* Model Provider Keys */}
         <Card>
