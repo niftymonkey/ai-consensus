@@ -1,10 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getApiKeys } from "@/lib/db";
 import { checkProviderAvailability } from "@/lib/provider-availability";
 import { fetchOpenRouterModels } from "@/lib/openrouter-models";
 import { filterAndMapModelsForDirectKeys } from "@/lib/model-availability";
-import { isPreviewEnabled, PREVIEW_ALLOWED_MODELS } from "@/lib/config/preview";
+import { PREVIEW_ALLOWED_MODELS } from "@/lib/config/preview";
+import { getPreviewUserIdentifier } from "@/lib/request-utils";
+import { isPreviewEnabledForUser } from "@/lib/posthog-server";
 
 export const runtime = "nodejs";
 
@@ -19,7 +21,7 @@ export const runtime = "nodejs";
  *
  * Priority: Direct provider keys take precedence over OpenRouter.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   // Check for database connection - required for this endpoint
   if (!process.env.POSTGRES_URL) {
     // In test/CI environments without a database, return empty response
@@ -46,7 +48,10 @@ export async function GET() {
 
   // For unauthenticated users, return preview models if preview is enabled
   if (!session?.user?.id) {
-    if (isPreviewEnabled()) {
+    const userIdentifier = getPreviewUserIdentifier(request);
+    const previewEnabled = await isPreviewEnabledForUser(userIdentifier);
+
+    if (previewEnabled) {
       const catalog = await fetchOpenRouterModels();
       const previewModels = catalog.filter(model =>
         PREVIEW_ALLOWED_MODELS.includes(model.id as typeof PREVIEW_ALLOWED_MODELS[number])
@@ -107,27 +112,32 @@ export async function GET() {
     const hasAnyKey = hasKeys.openrouter || hasKeys.anthropic || hasKeys.openai || hasKeys.google;
 
     // If no keys but preview is enabled, return preview-allowed models
-    if (!hasAnyKey && isPreviewEnabled()) {
-      const catalog = await fetchOpenRouterModels();
-      const previewModels = catalog.filter(model =>
-        PREVIEW_ALLOWED_MODELS.includes(model.id as typeof PREVIEW_ALLOWED_MODELS[number])
-      );
+    if (!hasAnyKey) {
+      const userIdentifier = getPreviewUserIdentifier(request);
+      const previewEnabled = await isPreviewEnabledForUser(userIdentifier);
 
-      return NextResponse.json(
-        {
-          models: previewModels,
-          hasKeys,
-          providerModels: null,
-          errors: {},
-          previewMode: true,
-          timestamp: new Date().toISOString(),
-        },
-        {
-          headers: {
-            "Cache-Control": "no-store",
+      if (previewEnabled) {
+        const catalog = await fetchOpenRouterModels();
+        const previewModels = catalog.filter(model =>
+          PREVIEW_ALLOWED_MODELS.includes(model.id as typeof PREVIEW_ALLOWED_MODELS[number])
+        );
+
+        return NextResponse.json(
+          {
+            models: previewModels,
+            hasKeys,
+            providerModels: null,
+            errors: {},
+            previewMode: true,
+            timestamp: new Date().toISOString(),
           },
-        }
-      );
+          {
+            headers: {
+              "Cache-Control": "no-store",
+            },
+          }
+        );
+      }
     }
 
     // Get the full OpenRouter catalog for model metadata

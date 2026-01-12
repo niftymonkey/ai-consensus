@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPreviewUserIdentifier } from "@/lib/request-utils";
 import { getPreviewStatus } from "@/lib/preview-db";
-import { isPreviewEnabled, PREVIEW_CONFIG, PREVIEW_ALLOWED_MODELS } from "@/lib/config/preview";
+import { PREVIEW_CONFIG, PREVIEW_ALLOWED_MODELS } from "@/lib/config/preview";
+import { isPreviewEnabledForUser } from "@/lib/posthog-server";
 
 export const runtime = "nodejs";
 
@@ -13,19 +14,20 @@ export const runtime = "nodejs";
  */
 export async function GET(request: NextRequest) {
   try {
-    // Check if preview system is enabled
-    if (!isPreviewEnabled()) {
+    // Get user identifier from request
+    const userIdentifier = getPreviewUserIdentifier(request);
+
+    // Check if preview system is enabled (includes feature flag check)
+    const previewEnabled = await isPreviewEnabledForUser(userIdentifier);
+    if (!previewEnabled) {
       return NextResponse.json(
         {
           enabled: false,
-          message: "Preview system is not configured",
+          message: "Preview is not available",
         },
         { status: 200 }
       );
     }
-
-    // Get user identifier from request
-    const userIdentifier = getPreviewUserIdentifier(request);
 
     // Get preview status from database
     const status = await getPreviewStatus(userIdentifier);

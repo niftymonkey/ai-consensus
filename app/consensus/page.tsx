@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ConsensusHeader } from "@/components/consensus/consensus-header";
 import { ConsensusInput } from "@/components/consensus/consensus-input";
 import { NoKeysAlert } from "@/components/consensus/no-keys-alert";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,6 +18,7 @@ import { CustomErrorToast } from "@/components/ui/custom-error-toast";
 import posthog from "posthog-js";
 import { PRESETS, resolvePreset, type PresetId } from "@/lib/presets";
 import { PREVIEW_PRESET, resolvePreviewPreset } from "@/lib/preview-preset";
+import { getRecommendedEvaluatorModels } from "@/lib/openrouter-models";
 import type {
   ModelSelection,
   RoundData,
@@ -362,47 +362,13 @@ export default function ConsensusPage() {
         // If localStorage fails, continue with defaults
       }
 
-      // In preview mode, prefer GPT-4o-mini (cheaper) as evaluator
-      const inPreviewMode = !hasAnyKey && previewStatus?.enabled && (previewStatus?.runsRemaining ?? 0) > 0;
-
-      if (inPreviewMode && models.length > 0) {
-        const gpt4oMini = models.find(m => m.id.includes("gpt-4o-mini"));
-        const chosen = gpt4oMini?.id ?? models[0].id;
-        setEvaluatorModel(chosen);
-        return;
-      }
-
-      // Filter evaluation-suitable models (exclude nano/mini/lite/flash)
-      const suitableModels = models.filter((m) => {
-        const lower = m.name.toLowerCase();
-        return (
-          !lower.includes("nano") &&
-          !lower.includes(" mini") &&
-          !lower.includes("-mini") &&
-          !lower.includes("lite") &&
-          !lower.includes("flash")
-        );
-      });
-
-      // 1. Try to find GPT-4o-mini (good balance of cost/quality for evaluation)
-      const gpt4oMini = suitableModels.find(
-        (m) => m.provider === "openai" && m.id.includes("gpt-4o-mini")
-      );
-
-      // 2. Fall back to Claude Sonnet
-      const claudeSonnet = suitableModels.find(
-        (m) => m.provider === "anthropic" && m.id.includes("sonnet")
-      );
-
-      // 3. Otherwise use first suitable model
-      if (gpt4oMini) {
-        setEvaluatorModel(gpt4oMini.id);
-      } else if (claudeSonnet) {
-        setEvaluatorModel(claudeSonnet.id);
-      } else if (suitableModels.length > 0) {
-        setEvaluatorModel(suitableModels[0].id);
+      // Use the recommendation logic to pick the best evaluator
+      // This considers evaluation suitability, provider diversity, and version scores
+      const recommended = getRecommendedEvaluatorModels(models, 1);
+      if (recommended.length > 0) {
+        setEvaluatorModel(recommended[0]);
       } else if (models.length > 0) {
-        // Fallback: use any available model
+        // Fallback: use first available model
         setEvaluatorModel(models[0].id);
       }
     }
@@ -936,11 +902,6 @@ export default function ConsensusPage() {
     }
   }
 
-  // With OpenRouter, user has access to all model types
-  const keyCount = hasKeys
-    ? (hasKeys.openrouter ? 3 : [hasKeys.anthropic, hasKeys.openai, hasKeys.google].filter(Boolean).length)
-    : 0;
-
   // Determine if user is in preview mode (no keys but preview available)
   const isPreviewMode = !hasAnyKey && previewStatus?.enabled && (previewStatus?.runsRemaining ?? 0) > 0;
 
@@ -972,15 +933,12 @@ export default function ConsensusPage() {
   if (!hasAnyKey && !isPreviewMode && !hasActiveSession) {
     return (
       <div className="container py-4 md:py-12 px-2 md:px-4">
-        <div className="space-y-6">
-          {/* Hide header when showing PreviewExhaustedCard - card is self-contained */}
-          {!isPreviewExhausted && <ConsensusHeader keyCount={keyCount} />}
-          {isPreviewExhausted ? (
-            <PreviewExhaustedCard />
-          ) : (
-            <NoKeysAlert />
-          )}
-        </div>
+        {/* Both cards are self-contained, no header needed */}
+        {isPreviewExhausted ? (
+          <PreviewExhaustedCard />
+        ) : (
+          <NoKeysAlert />
+        )}
       </div>
     );
   }

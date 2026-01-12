@@ -24,11 +24,11 @@ import { z } from "zod";
 import { getPreviewUserIdentifier } from "@/lib/request-utils";
 import { getPreviewStatus, incrementPreviewUsage } from "@/lib/preview-db";
 import {
-  isPreviewEnabled,
   getPreviewApiKey,
   validatePreviewParams,
   PREVIEW_CONFIG,
 } from "@/lib/config/preview";
+import { isPreviewEnabledForUser } from "@/lib/posthog-server";
 
 export const maxDuration = 600; // 10 minutes for multiple rounds
 export const runtime = "nodejs";
@@ -111,8 +111,12 @@ export async function POST(request: NextRequest) {
 
     // Handle preview mode
     if (isPreviewMode) {
-      // Check if preview system is enabled
-      if (!isPreviewEnabled()) {
+      // Get user identifier for preview tracking
+      previewUserIdentifier = getPreviewUserIdentifier(request);
+
+      // Check if preview system is enabled (includes feature flag check)
+      const previewEnabled = await isPreviewEnabledForUser(previewUserIdentifier);
+      if (!previewEnabled) {
         return new Response(
           JSON.stringify({
             error: "Preview mode is not available. Please sign in and add your API keys.",
@@ -120,9 +124,6 @@ export async function POST(request: NextRequest) {
           { status: 403, headers: { "Content-Type": "application/json" } }
         );
       }
-
-      // Get user identifier for preview tracking
-      previewUserIdentifier = getPreviewUserIdentifier(request);
 
       // Check preview usage
       const previewStatus = await getPreviewStatus(previewUserIdentifier);

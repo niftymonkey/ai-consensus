@@ -4,6 +4,9 @@
  * Centralizes all preview constraints and configuration.
  * Preview runs use a system-wide OpenRouter API key with strict limits to control costs.
  *
+ * NOTE: This file is imported by client components via preview-preset.ts.
+ * Server-only functions (like isPreviewEnabledForUser) are in posthog-server.ts.
+ *
  * Cost estimates (as of Jan 2025):
  * - GPT-4o-mini: ~$0.15/1M input, ~$0.60/1M output
  * - Claude 3.5 Haiku: ~$0.80/1M input, ~$4/1M output
@@ -37,6 +40,7 @@ export function getPreviewApiKey(): string {
 
 /**
  * Check if preview system is enabled (API key is configured)
+ * This is a quick sync check - use isPreviewEnabledForUser from posthog-server.ts for feature flag support
  */
 export function isPreviewEnabled(): boolean {
   return !!process.env.OPENROUTER_PREVIEW_API_KEY;
@@ -55,7 +59,7 @@ export const PREVIEW_ALLOWED_MODELS = [
   "openai/gpt-4o-mini", // ~$0.15/1M input, $0.60/1M output
   "anthropic/claude-3.5-haiku", // ~$0.80/1M input, $4/1M output
   "google/gemini-2.0-flash-001", // ~$0.10/1M input, $0.40/1M output
-  "meta-llama/llama-3.1-8b-instruct", // ~$0.05/1M input, $0.05/1M output
+  "x-ai/grok-4-fast", // ~$0.20/1M input, $0.50/1M output, 128k context
   "mistralai/mistral-small-24b-instruct-2501", // ~$0.10/1M input, $0.30/1M output
 ] as const;
 
