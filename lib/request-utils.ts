@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { hashIpAddress } from "./trial-db";
+import { hashIpAddress } from "./preview-db";
 
 /**
  * Extract client IP address from request headers
@@ -34,10 +34,10 @@ export function getClientIp(request: NextRequest): string {
 }
 
 /**
- * Get a hashed user identifier from request for trial tracking
+ * Get a hashed user identifier from request for preview tracking
  * Uses IP address hashed with SHA-256 for privacy
  */
-export function getTrialUserIdentifier(request: NextRequest): string {
+export function getPreviewUserIdentifier(request: NextRequest): string {
   const ip = getClientIp(request);
   return hashIpAddress(ip);
 }

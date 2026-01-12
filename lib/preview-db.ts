@@ -1,10 +1,10 @@
 import { sql } from "@vercel/postgres";
 import { createHash } from "crypto";
 
-// Trial configuration constants
-const MAX_TRIAL_RUNS = 3;
+// Preview configuration constants
+const MAX_PREVIEW_RUNS = 3;
 
-export interface TrialUsage {
+export interface PreviewUsage {
   id: number;
   userIdentifier: string;
   runsUsed: number;
@@ -12,7 +12,7 @@ export interface TrialUsage {
   updatedAt: Date;
 }
 
-export interface TrialStatus {
+export interface PreviewStatus {
   runsUsed: number;
   runsRemaining: number;
   totalAllowed: number;
@@ -26,17 +26,17 @@ export function hashIpAddress(ip: string): string {
 }
 
 /**
- * Get trial status for a user identifier (hashed IP)
+ * Get preview status for a user identifier (hashed IP)
  * Returns runs used, remaining, and total allowed
  */
-export async function getTrialStatus(
+export async function getPreviewStatus(
   userIdentifier: string
-): Promise<TrialStatus> {
+): Promise<PreviewStatus> {
   const result = await sql<{
     runs_used: number;
   }>`
     SELECT runs_used
-    FROM trial_usage
+    FROM preview_usage
     WHERE user_identifier = ${userIdentifier}
   `;
 
@@ -44,58 +44,58 @@ export async function getTrialStatus(
 
   return {
     runsUsed,
-    runsRemaining: Math.max(0, MAX_TRIAL_RUNS - runsUsed),
-    totalAllowed: MAX_TRIAL_RUNS,
+    runsRemaining: Math.max(0, MAX_PREVIEW_RUNS - runsUsed),
+    totalAllowed: MAX_PREVIEW_RUNS,
   };
 }
 
 /**
- * Check if a user has remaining trial runs
+ * Check if a user has remaining preview runs
  */
-export async function hasTrialRunsRemaining(
+export async function hasPreviewRunsRemaining(
   userIdentifier: string
 ): Promise<boolean> {
-  const status = await getTrialStatus(userIdentifier);
+  const status = await getPreviewStatus(userIdentifier);
   return status.runsRemaining > 0;
 }
 
 /**
- * Increment trial usage for a user
+ * Increment preview usage for a user
  * Creates a new record if first run, otherwise increments counter
- * Returns the updated trial status
+ * Returns the updated preview status
  */
-export async function incrementTrialUsage(
+export async function incrementPreviewUsage(
   userIdentifier: string
-): Promise<TrialStatus> {
+): Promise<PreviewStatus> {
   // Upsert: insert new record or increment existing
   await sql`
-    INSERT INTO trial_usage (user_identifier, runs_used, updated_at)
+    INSERT INTO preview_usage (user_identifier, runs_used, updated_at)
     VALUES (${userIdentifier}, 1, CURRENT_TIMESTAMP)
     ON CONFLICT (user_identifier)
     DO UPDATE SET
-      runs_used = trial_usage.runs_used + 1,
+      runs_used = preview_usage.runs_used + 1,
       updated_at = CURRENT_TIMESTAMP
   `;
 
-  return getTrialStatus(userIdentifier);
+  return getPreviewStatus(userIdentifier);
 }
 
 /**
- * Get trial status from a raw IP address
+ * Get preview status from a raw IP address
  * Convenience function that handles hashing
  */
-export async function getTrialStatusFromIp(ip: string): Promise<TrialStatus> {
+export async function getPreviewStatusFromIp(ip: string): Promise<PreviewStatus> {
   const userIdentifier = hashIpAddress(ip);
-  return getTrialStatus(userIdentifier);
+  return getPreviewStatus(userIdentifier);
 }
 
 /**
- * Increment trial usage from a raw IP address
+ * Increment preview usage from a raw IP address
  * Convenience function that handles hashing
  */
-export async function incrementTrialUsageFromIp(
+export async function incrementPreviewUsageFromIp(
   ip: string
-): Promise<TrialStatus> {
+): Promise<PreviewStatus> {
   const userIdentifier = hashIpAddress(ip);
-  return incrementTrialUsage(userIdentifier);
+  return incrementPreviewUsage(userIdentifier);
 }

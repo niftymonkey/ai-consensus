@@ -4,17 +4,17 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Key } from "lucide-react";
 
-interface TrialUpgradeCtaProps {
+interface PreviewUpgradeCtaProps {
   variant?: "default" | "outline" | "ghost";
   size?: "default" | "sm" | "lg";
   className?: string;
 }
 
-export function TrialUpgradeCta({
+export function PreviewUpgradeCta({
   variant = "default",
   size = "sm",
   className,
-}: TrialUpgradeCtaProps) {
+}: PreviewUpgradeCtaProps) {
   return (
     <Button variant={variant} size={size} className={className} asChild>
       <Link href="/settings">

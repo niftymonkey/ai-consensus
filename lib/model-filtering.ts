@@ -77,19 +77,19 @@ export function validateModelSelections(
  * In normal mode, filters out "efficient tier" models (mini/flash/small/haiku/etc.)
  * since these are generally not ideal for the complex task of evaluation.
  *
- * In trial mode, returns all models unfiltered since only efficient tier
+ * In preview mode, returns all models unfiltered since only efficient tier
  * models are available and we need to use one of them.
  *
  * @param models - Full list of available models
- * @param isTrialMode - If true, skip filtering (trial mode)
+ * @param isPreviewMode - If true, skip filtering (preview mode)
  * @returns Models suitable for evaluation
  */
 export function filterEvaluatorModels<T extends Model>(
   models: T[],
-  isTrialMode: boolean
+  isPreviewMode: boolean
 ): T[] {
-  // In trial mode, all models are efficient tier - return them all
-  if (isTrialMode) {
+  // In preview mode, all models are efficient tier - return them all
+  if (isPreviewMode) {
     return models;
   }
 

@@ -2,13 +2,13 @@
 
 import { cn } from "@/lib/utils";
 
-interface TrialBadgeProps {
+interface PreviewBadgeProps {
   runsRemaining: number;
   totalAllowed: number;
   className?: string;
 }
 
-export function TrialBadge({ runsRemaining, totalAllowed, className }: TrialBadgeProps) {
+export function PreviewBadge({ runsRemaining, totalAllowed, className }: PreviewBadgeProps) {
   return (
     <span
       className={cn(

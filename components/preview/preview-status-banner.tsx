@@ -1,31 +1,31 @@
 "use client";
 
-import { useTrialStatus } from "@/hooks/use-trial-status";
-import { TrialBanner } from "./trial-banner";
+import { usePreviewStatus } from "@/hooks/use-preview-status";
+import { PreviewBanner } from "./preview-banner";
 import { Skeleton } from "@/components/ui/skeleton";
 
-interface TrialStatusBannerProps {
+interface PreviewStatusBannerProps {
   /** If true, show banner even when user has 0 runs (exhausted state) */
   showWhenExhausted?: boolean;
   className?: string;
 }
 
 /**
- * Smart wrapper that fetches trial status and conditionally renders the banner.
- * Only shows for trial users (enabled=true), hides for BYOK users.
+ * Smart wrapper that fetches preview status and conditionally renders the banner.
+ * Only shows for preview users (enabled=true), hides for BYOK users.
  */
-export function TrialStatusBanner({
+export function PreviewStatusBanner({
   showWhenExhausted = true,
   className,
-}: TrialStatusBannerProps) {
-  const { status, isLoading } = useTrialStatus();
+}: PreviewStatusBannerProps) {
+  const { status, isLoading } = usePreviewStatus();
 
   // Loading state - show skeleton
   if (isLoading) {
     return <Skeleton className="h-14 w-full rounded-lg" />;
   }
 
-  // Not in trial mode (BYOK user or trial disabled)
+  // Not in preview mode (BYOK user or preview disabled)
   if (!status?.enabled) {
     return null;
   }
@@ -36,7 +36,7 @@ export function TrialStatusBanner({
   }
 
   return (
-    <TrialBanner
+    <PreviewBanner
       runsRemaining={status.runsRemaining}
       totalAllowed={status.totalAllowed}
       className={className}

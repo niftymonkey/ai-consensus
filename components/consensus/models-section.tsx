@@ -18,7 +18,7 @@ interface ModelsSectionProps {
   setEvaluatorModel: (value: string) => void;
   disabled?: boolean;
   isLoading?: boolean;
-  isTrialMode?: boolean;
+  isPreviewMode?: boolean;
 }
 
 export function ModelsSection({
@@ -30,12 +30,12 @@ export function ModelsSection({
   setEvaluatorModel,
   disabled = false,
   isLoading = false,
-  isTrialMode = false,
+  isPreviewMode = false,
 }: ModelsSectionProps) {
-  // Filter evaluator models - in trial mode, include all models
+  // Filter evaluator models - in preview mode, include all models
   const evaluatorModels = useMemo(() => {
-    return filterEvaluatorModels(models, isTrialMode);
-  }, [models, isTrialMode]);
+    return filterEvaluatorModels(models, isPreviewMode);
+  }, [models, isPreviewMode]);
 
   const groupedEvaluatorModels = useMemo(
     () => groupModelsByProvider(evaluatorModels),

@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { PRESETS, type PresetId, type PresetDefinition } from "@/lib/presets";
-import { TRIAL_CONFIG } from "@/lib/config/trial";
+import { PREVIEW_CONFIG } from "@/lib/config/preview";
 import {
   Zap,
   Scale,
@@ -28,7 +28,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Sparkles,
 };
 
-interface TrialConstraints {
+interface PreviewConstraints {
   maxRounds: number;
   maxParticipants: number;
   allowsSearch: boolean;
@@ -38,24 +38,24 @@ interface PresetSelectorProps {
   activePreset: PresetId | null;
   onPresetSelect: (presetId: PresetId) => void;
   disabled?: boolean;
-  /** Trial constraints - if provided, presets exceeding limits will be disabled */
-  trialConstraints?: TrialConstraints | null;
+  /** Preview constraints - if provided, presets exceeding limits will be disabled */
+  previewConstraints?: PreviewConstraints | null;
 }
 
 /**
- * Check if a preset exceeds trial constraints
+ * Check if a preset exceeds preview constraints
  */
-function getTrialDisabledReason(
+function getPreviewDisabledReason(
   preset: PresetDefinition,
-  constraints: TrialConstraints
+  constraints: PreviewConstraints
 ): string | null {
   const reasons: string[] = [];
 
   if (preset.maxRounds > constraints.maxRounds) {
-    reasons.push(`${preset.maxRounds} rounds (trial max: ${constraints.maxRounds})`);
+    reasons.push(`${preset.maxRounds} rounds (preview max: ${constraints.maxRounds})`);
   }
   if (preset.modelCount > constraints.maxParticipants) {
-    reasons.push(`${preset.modelCount} models (trial max: ${constraints.maxParticipants})`);
+    reasons.push(`${preset.modelCount} models (preview max: ${constraints.maxParticipants})`);
   }
 
   if (reasons.length === 0) return null;
@@ -66,7 +66,7 @@ export function PresetSelector({
   activePreset,
   onPresetSelect,
   disabled = false,
-  trialConstraints = null,
+  previewConstraints = null,
 }: PresetSelectorProps) {
   const presetList = Object.values(PRESETS);
 
@@ -79,19 +79,19 @@ export function PresetSelector({
             const Icon = ICON_MAP[preset.icon] || Zap;
             const isActive = activePreset === preset.id;
 
-            // Check if this preset exceeds trial limits
-            const trialDisabledReason = trialConstraints
-              ? getTrialDisabledReason(preset, trialConstraints)
+            // Check if this preset exceeds preview limits
+            const previewDisabledReason = previewConstraints
+              ? getPreviewDisabledReason(preset, previewConstraints)
               : null;
-            const isTrialDisabled = trialDisabledReason !== null;
-            const isButtonDisabled = disabled || isTrialDisabled;
+            const isPreviewDisabled = previewDisabledReason !== null;
+            const isButtonDisabled = disabled || isPreviewDisabled;
 
             return (
               <Tooltip key={preset.id}>
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    onClick={() => !isTrialDisabled && onPresetSelect(preset.id)}
+                    onClick={() => !isPreviewDisabled && onPresetSelect(preset.id)}
                     disabled={isButtonDisabled}
                     className={cn(
                       "relative flex items-center justify-center gap-2 px-3 py-2 rounded-lg border transition-all",
@@ -99,12 +99,12 @@ export function PresetSelector({
                       "disabled:opacity-50 disabled:cursor-not-allowed",
                       isActive
                         ? "bg-primary text-primary-foreground border-primary shadow-sm hover:bg-primary/80 active:bg-primary/60"
-                        : isTrialDisabled
+                        : isPreviewDisabled
                           ? "bg-muted/50 border-border text-muted-foreground"
                           : "bg-background hover:bg-muted border-border hover:border-muted-foreground/30"
                     )}
                   >
-                    {isTrialDisabled ? (
+                    {isPreviewDisabled ? (
                       <Lock className="h-4 w-4 shrink-0" />
                     ) : (
                       <Icon className="h-4 w-4 shrink-0" />
@@ -122,9 +122,9 @@ export function PresetSelector({
                     {preset.modelCount} models, {preset.maxRounds} rounds, {preset.consensusThreshold}% threshold
                     {preset.enableSearch && ", web search"}
                   </p>
-                  {isTrialDisabled && (
+                  {isPreviewDisabled && (
                     <p className="text-xs mt-2 text-amber-600 dark:text-amber-400 font-medium">
-                      {trialDisabledReason}
+                      {previewDisabledReason}
                     </p>
                   )}
                 </TooltipContent>

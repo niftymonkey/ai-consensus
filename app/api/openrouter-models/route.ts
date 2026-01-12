@@ -4,7 +4,7 @@ import {
   groupModelsByProvider,
   getProviders,
 } from "@/lib/openrouter-models";
-import { TRIAL_ALLOWED_MODELS, isModelAllowedInTrial } from "@/lib/config/trial";
+import { PREVIEW_ALLOWED_MODELS, isModelAllowedInPreview } from "@/lib/config/preview";
 
 export const runtime = "nodejs";
 
@@ -15,18 +15,18 @@ export const runtime = "nodejs";
  * This is public data from OpenRouter's API - no auth required.
  *
  * Query params:
- * - trial=true: Filter to only trial-allowed models
+ * - preview=true: Filter to only preview-allowed models
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const isTrialMode = searchParams.get("trial") === "true";
+    const isPreviewMode = searchParams.get("preview") === "true";
 
     let models = await fetchOpenRouterModels();
 
-    // Filter to trial-allowed models if in trial mode
-    if (isTrialMode) {
-      models = models.filter((model) => isModelAllowedInTrial(model.id));
+    // Filter to preview-allowed models if in preview mode
+    if (isPreviewMode) {
+      models = models.filter((model) => isModelAllowedInPreview(model.id));
     }
 
     const grouped = groupModelsByProvider(models);
@@ -39,8 +39,8 @@ export async function GET(request: NextRequest) {
         providers,
         count: models.length,
         timestamp: new Date().toISOString(),
-        isTrialMode,
-        ...(isTrialMode && { trialAllowedModels: TRIAL_ALLOWED_MODELS }),
+        isPreviewMode,
+        ...(isPreviewMode && { previewAllowedModels: PREVIEW_ALLOWED_MODELS }),
       },
       {
         headers: {

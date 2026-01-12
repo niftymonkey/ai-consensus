@@ -53,7 +53,7 @@ export function ProcessSection({
                 disabled={disabled}
                 className="w-full"
               />
-              {/* Restricted zone overlay for trial mode */}
+              {/* Restricted zone overlay for preview mode */}
               {maxRoundsLimit < 10 && (
                 <div
                   className="absolute top-1/2 -translate-y-1/2 h-1.5 rounded-r-full bg-muted-foreground/20 pointer-events-none"

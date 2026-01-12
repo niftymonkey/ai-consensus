@@ -237,8 +237,8 @@ describe("validateModelSelections", () => {
 });
 
 describe("filterEvaluatorModels", () => {
-  // Trial models - all "efficient tier" (mini/flash/small/haiku)
-  const trialModels: Model[] = [
+  // Preview models - all "efficient tier" (mini/flash/small/haiku)
+  const previewModels: Model[] = [
     { id: "openai/gpt-4o-mini", provider: "openai", name: "GPT-4o-mini" },
     { id: "anthropic/claude-3.5-haiku", provider: "anthropic", name: "Claude 3.5 Haiku" },
     { id: "google/gemini-2.0-flash-001", provider: "google", name: "Gemini 2.0 Flash" },
@@ -257,7 +257,7 @@ describe("filterEvaluatorModels", () => {
     { id: "meta-llama/llama-3.3-70b-instruct", provider: "meta-llama", name: "Llama 3.3 70B Instruct" },
   ];
 
-  describe("in normal mode (isTrialMode = false)", () => {
+  describe("in normal mode (isPreviewMode = false)", () => {
     it("filters out mini models", () => {
       const result = filterEvaluatorModels(mixedModels, false);
       expect(result.find(m => m.id === "openai/gpt-4o-mini")).toBeUndefined();
@@ -288,29 +288,29 @@ describe("filterEvaluatorModels", () => {
     });
   });
 
-  describe("in trial mode (isTrialMode = true)", () => {
+  describe("in preview mode (isPreviewMode = true)", () => {
     it("returns all models without filtering", () => {
-      const result = filterEvaluatorModels(trialModels, true);
-      expect(result.length).toBe(trialModels.length);
+      const result = filterEvaluatorModels(previewModels, true);
+      expect(result.length).toBe(previewModels.length);
     });
 
     it("includes mini models", () => {
-      const result = filterEvaluatorModels(trialModels, true);
+      const result = filterEvaluatorModels(previewModels, true);
       expect(result.find(m => m.id === "openai/gpt-4o-mini")).toBeDefined();
     });
 
     it("includes flash models", () => {
-      const result = filterEvaluatorModels(trialModels, true);
+      const result = filterEvaluatorModels(previewModels, true);
       expect(result.find(m => m.id === "google/gemini-2.0-flash-001")).toBeDefined();
     });
 
     it("includes small models", () => {
-      const result = filterEvaluatorModels(trialModels, true);
+      const result = filterEvaluatorModels(previewModels, true);
       expect(result.find(m => m.id === "mistralai/mistral-small-24b-instruct-2501")).toBeDefined();
     });
 
     it("includes haiku models", () => {
-      const result = filterEvaluatorModels(trialModels, true);
+      const result = filterEvaluatorModels(previewModels, true);
       expect(result.find(m => m.id === "anthropic/claude-3.5-haiku")).toBeDefined();
     });
   });

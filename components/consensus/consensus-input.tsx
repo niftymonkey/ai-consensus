@@ -14,10 +14,10 @@ interface ConsensusInputProps {
   onPresetSelect?: (presetId: PresetId) => void;
   onSubmitWithPreset?: (prompt: string, presetId: PresetId) => void;
   showSuggestions?: boolean;
-  isTrialMode?: boolean;
+  isPreviewMode?: boolean;
 }
 
-export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmitWithPrompt, onPresetSelect, onSubmitWithPreset, showSuggestions = false, isTrialMode = false }: ConsensusInputProps) {
+export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmitWithPrompt, onPresetSelect, onSubmitWithPreset, showSuggestions = false, isPreviewMode = false }: ConsensusInputProps) {
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -30,6 +30,13 @@ export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmi
 
   const handleSuggestionSelect = (suggestion: string, preset: PresetId) => {
     setPrompt(suggestion);
+    // In preview mode, just submit with current settings (don't try to apply preset)
+    if (isPreviewMode) {
+      if (onSubmitWithPrompt) {
+        onSubmitWithPrompt(suggestion);
+      }
+      return;
+    }
     // Use the combined callback if available (handles preset + submit atomically)
     if (onSubmitWithPreset) {
       onSubmitWithPreset(suggestion, preset);
@@ -65,7 +72,7 @@ export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmi
               onSelect={handleSuggestionSelect}
               disabled={isLoading}
               show={!prompt.trim()}
-              isTrialMode={isTrialMode}
+              isPreviewMode={isPreviewMode}
             />
           )}
           <div className="flex items-center justify-between">

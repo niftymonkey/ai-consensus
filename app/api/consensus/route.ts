@@ -21,14 +21,14 @@ import { sendEvent, type ConsensusEvent } from "@/lib/consensus-events";
 import { logger } from "@/lib/logger";
 import { captureServerException, getPostHogClient } from "@/lib/posthog-server";
 import { z } from "zod";
-import { getTrialUserIdentifier } from "@/lib/request-utils";
-import { getTrialStatus, incrementTrialUsage } from "@/lib/trial-db";
+import { getPreviewUserIdentifier } from "@/lib/request-utils";
+import { getPreviewStatus, incrementPreviewUsage } from "@/lib/preview-db";
 import {
-  isTrialEnabled,
-  getTrialApiKey,
-  validateTrialParams,
-  TRIAL_CONFIG,
-} from "@/lib/config/trial";
+  isPreviewEnabled,
+  getPreviewApiKey,
+  validatePreviewParams,
+  PREVIEW_CONFIG,
+} from "@/lib/config/preview";
 
 export const maxDuration = 600; // 10 minutes for multiple rounds
 export const runtime = "nodejs";
@@ -57,7 +57,7 @@ type ConsensusRequest = z.infer<typeof ConsensusRequestSchema>;
 
 /**
  * POST /api/consensus - Multi-round consensus workflow
- * Supports both authenticated (BYOK) and trial modes
+ * Supports both authenticated (BYOK) and preview modes
  */
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -87,9 +87,9 @@ export async function POST(request: NextRequest) {
       enableSearch,
     } = parseResult.data;
 
-    // Determine if this is a trial run or authenticated BYOK run
-    // Trial mode: no session OR session with no API keys configured
-    let isTrialMode = false;
+    // Determine if this is a preview run or authenticated BYOK run
+    // Preview mode: no session OR session with no API keys configured
+    let isPreviewMode = false;
     let keys: Record<string, string | null> = {
       anthropic: null,
       openai: null,
@@ -97,47 +97,47 @@ export async function POST(request: NextRequest) {
       tavily: null,
       openrouter: null,
     };
-    let trialUserIdentifier: string | null = null;
+    let previewUserIdentifier: string | null = null;
 
     if (session?.user?.id) {
       // Authenticated user - check if they have API keys
       keys = await getApiKeys(session.user.id);
       const hasAnyKey = keys.anthropic || keys.openai || keys.google || keys.openrouter;
-      isTrialMode = !hasAnyKey;
+      isPreviewMode = !hasAnyKey;
     } else {
-      // No session - trial mode only
-      isTrialMode = true;
+      // No session - preview mode only
+      isPreviewMode = true;
     }
 
-    // Handle trial mode
-    if (isTrialMode) {
-      // Check if trial system is enabled
-      if (!isTrialEnabled()) {
+    // Handle preview mode
+    if (isPreviewMode) {
+      // Check if preview system is enabled
+      if (!isPreviewEnabled()) {
         return new Response(
           JSON.stringify({
-            error: "Trial mode is not available. Please sign in and add your API keys.",
+            error: "Preview mode is not available. Please sign in and add your API keys.",
           }),
           { status: 403, headers: { "Content-Type": "application/json" } }
         );
       }
 
-      // Get user identifier for trial tracking
-      trialUserIdentifier = getTrialUserIdentifier(request);
+      // Get user identifier for preview tracking
+      previewUserIdentifier = getPreviewUserIdentifier(request);
 
-      // Check trial usage
-      const trialStatus = await getTrialStatus(trialUserIdentifier);
-      if (trialStatus.runsRemaining <= 0) {
+      // Check preview usage
+      const previewStatus = await getPreviewStatus(previewUserIdentifier);
+      if (previewStatus.runsRemaining <= 0) {
         return new Response(
           JSON.stringify({
-            error: "Trial limit reached. Add your API key for unlimited access.",
-            trialExhausted: true,
+            error: "Preview limit reached. Add your API key for unlimited access.",
+            previewExhausted: true,
           }),
           { status: 429, headers: { "Content-Type": "application/json" } }
         );
       }
 
-      // Validate params against trial constraints
-      const validation = validateTrialParams({
+      // Validate params against preview constraints
+      const validation = validatePreviewParams({
         models: models.map((m) => m.modelId),
         rounds: maxRounds,
         participants: models.length,
@@ -146,27 +146,27 @@ export async function POST(request: NextRequest) {
       if (!validation.valid) {
         return new Response(
           JSON.stringify({
-            error: `Trial constraints: ${validation.errors.join("; ")}`,
-            trialConstraintViolation: true,
+            error: `Preview constraints: ${validation.errors.join("; ")}`,
+            previewConstraintViolation: true,
           }),
           { status: 400, headers: { "Content-Type": "application/json" } }
         );
       }
 
-      // Web search not available in trial mode
+      // Web search not available in preview mode
       if (enableSearch) {
         return new Response(
           JSON.stringify({
-            error: "Web search is not available in trial mode. Add your API keys to enable search.",
+            error: "Web search is not available in preview mode. Add your API keys to enable search.",
           }),
           { status: 400, headers: { "Content-Type": "application/json" } }
         );
       }
 
-      // Set up trial API key for OpenRouter
-      keys.openrouter = getTrialApiKey();
+      // Set up preview API key for OpenRouter
+      keys.openrouter = getPreviewApiKey();
 
-      console.log(`[Consensus] Trial mode: user=${trialUserIdentifier.substring(0, 8)}..., runsRemaining=${trialStatus.runsRemaining}`);
+      console.log(`[Consensus] Preview mode: user=${previewUserIdentifier.substring(0, 8)}..., runsRemaining=${previewStatus.runsRemaining}`);
     }
 
     // Validate Tavily key if search enabled (only for BYOK mode)
@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
     const useTargetedRefinement = true; // Temporarily hardcoded for testing
 
     // Log request summary
-    console.log(`[Consensus] Starting: ${models.length} models, evaluator=${evaluatorModel}, maxRounds=${maxRounds}, threshold=${consensusThreshold}%, search=${enableSearch}, targetedRefinement=${useTargetedRefinement}, mode=${isTrialMode ? "trial" : "byok"}`);
+    console.log(`[Consensus] Starting: ${models.length} models, evaluator=${evaluatorModel}, maxRounds=${maxRounds}, threshold=${consensusThreshold}%, search=${enableSearch}, targetedRefinement=${useTargetedRefinement}, mode=${isPreviewMode ? "preview" : "byok"}`);
 
     // Create provider instances based on available keys
     // Direct provider keys take precedence over OpenRouter
@@ -285,9 +285,9 @@ export async function POST(request: NextRequest) {
     // Use the routed model ID (direct format for direct providers, OpenRouter format for OpenRouter)
     const evaluatorModelId = evaluatorProviderInfo.modelId;
 
-    // Create database record (skip for trial mode - no user ID)
+    // Create database record (skip for preview mode - no user ID)
     let conversationId: number | null = null;
-    if (!isTrialMode && session?.user?.id) {
+    if (!isPreviewMode && session?.user?.id) {
       conversationId = await createConsensusConversation(
         session.user.id,
         prompt,
@@ -540,7 +540,7 @@ export async function POST(request: NextRequest) {
               searchData: searchData || undefined,
             });
 
-            // Save round to database (skip for trial mode)
+            // Save round to database (skip for preview mode)
             if (conversationId !== null) {
               await saveConsensusRound(conversationId, {
                 roundNumber: currentRound,
@@ -640,7 +640,7 @@ export async function POST(request: NextRequest) {
           // Check if aborted before final updates
           if (request.signal.aborted) return;
 
-          // Update database with final result (skip for trial mode)
+          // Update database with final result (skip for preview mode)
           if (conversationId !== null) {
             await updateConversationResult(
               conversationId,
@@ -650,10 +650,10 @@ export async function POST(request: NextRequest) {
             );
           }
 
-          // Increment trial usage on successful completion
-          if (isTrialMode && trialUserIdentifier) {
-            await incrementTrialUsage(trialUserIdentifier);
-            console.log(`[Consensus] Trial run completed for user=${trialUserIdentifier.substring(0, 8)}...`);
+          // Increment preview usage on successful completion
+          if (isPreviewMode && previewUserIdentifier) {
+            await incrementPreviewUsage(previewUserIdentifier);
+            console.log(`[Consensus] Preview run completed for user=${previewUserIdentifier.substring(0, 8)}...`);
           }
 
           // Send final responses
@@ -672,7 +672,7 @@ export async function POST(request: NextRequest) {
           // Capture to PostHog server-side with model context
           captureServerException(
             error instanceof Error ? error : new Error(error.message || "Unknown error"),
-            session?.user?.id || (isTrialMode ? `trial:${trialUserIdentifier?.substring(0, 8)}` : "anonymous"),
+            session?.user?.id || (isPreviewMode ? `preview:${previewUserIdentifier?.substring(0, 8)}` : "anonymous"),
             {
               error_type: "consensus_workflow_error",
               current_round: currentRound,
@@ -681,7 +681,7 @@ export async function POST(request: NextRequest) {
               evaluator_model: evaluatorModel,
               selected_models: models.map(m => ({ id: m.id, modelId: m.modelId, provider: m.provider })),
               search_enabled: enableSearch,
-              is_trial_mode: isTrialMode,
+              is_preview_mode: isPreviewMode,
             }
           );
 

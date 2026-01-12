@@ -1,8 +1,8 @@
 "use client";
 
-import { useTrialStatus } from "@/hooks/use-trial-status";
+import { usePreviewStatus } from "@/hooks/use-preview-status";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrialBadge } from "./trial-badge";
+import { PreviewBadge } from "./preview-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Zap, Infinity, Layers, Search } from "lucide-react";
 
@@ -50,18 +50,18 @@ const BENEFITS = [
 ];
 
 /**
- * Shows upgrade messaging for trial users on the settings page.
- * Only renders for users in trial mode.
+ * Shows upgrade messaging for preview users on the settings page.
+ * Only renders for users in preview mode.
  */
-export function TrialUpgradeCard() {
-  const { status, isLoading } = useTrialStatus();
+export function PreviewUpgradeCard() {
+  const { status, isLoading } = usePreviewStatus();
 
   // Loading state
   if (isLoading) {
     return <Skeleton className="h-48 w-full rounded-lg" />;
   }
 
-  // Not in trial mode - don't show upgrade card
+  // Not in preview mode - don't show upgrade card
   if (!status?.enabled) {
     return null;
   }
@@ -70,14 +70,14 @@ export function TrialUpgradeCard() {
     <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Upgrade to Full Access</CardTitle>
-          <TrialBadge
+          <CardTitle className="text-lg">Bring Your Own Key</CardTitle>
+          <PreviewBadge
             runsRemaining={status.runsRemaining}
             totalAllowed={status.totalAllowed}
           />
         </div>
         <CardDescription>
-          Add your API key below to unlock unlimited access
+          Add your API key below for full access
         </CardDescription>
       </CardHeader>
       <CardContent>

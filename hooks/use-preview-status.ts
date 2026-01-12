@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 
-export interface TrialStatus {
+export interface PreviewStatus {
   enabled: boolean;
   runsUsed: number;
   runsRemaining: number;
@@ -12,14 +12,14 @@ export interface TrialStatus {
   };
 }
 
-interface UseTrialStatusReturn {
-  status: TrialStatus | null;
+interface UsePreviewStatusReturn {
+  status: PreviewStatus | null;
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
 }
 
-const DISABLED_STATUS: TrialStatus = {
+const DISABLED_STATUS: PreviewStatus = {
   enabled: false,
   runsUsed: 0,
   runsRemaining: 0,
@@ -27,10 +27,10 @@ const DISABLED_STATUS: TrialStatus = {
 };
 
 /**
- * Hook to fetch trial status from API
+ * Hook to fetch preview status from API
  */
-export function useTrialStatus(): UseTrialStatusReturn {
-  const [status, setStatus] = useState<TrialStatus | null>(null);
+export function usePreviewStatus(): UsePreviewStatusReturn {
+  const [status, setStatus] = useState<PreviewStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,17 +39,17 @@ export function useTrialStatus(): UseTrialStatusReturn {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch("/api/trial");
+      const response = await fetch("/api/preview");
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch trial status: ${response.status}`);
+        throw new Error(`Failed to fetch preview status: ${response.status}`);
       }
 
       const data = await response.json();
       setStatus(data);
     } catch (err: unknown) {
-      console.error("Error fetching trial status:", err);
-      setError(err instanceof Error ? err.message : "Failed to fetch trial status");
+      console.error("Error fetching preview status:", err);
+      setError(err instanceof Error ? err.message : "Failed to fetch preview status");
       setStatus(DISABLED_STATUS);
     } finally {
       setIsLoading(false);

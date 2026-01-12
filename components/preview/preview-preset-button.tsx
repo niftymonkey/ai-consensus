@@ -8,21 +8,21 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { TRIAL_PRESET } from "@/lib/trial-preset";
+import { PREVIEW_PRESET } from "@/lib/preview-preset";
 
-interface TrialPresetButtonProps {
+interface PreviewPresetButtonProps {
   isActive: boolean;
   onSelect: () => void;
   disabled?: boolean;
   runsRemaining?: number;
 }
 
-export function TrialPresetButton({
+export function PreviewPresetButton({
   isActive,
   onSelect,
   disabled = false,
   runsRemaining,
-}: TrialPresetButtonProps) {
+}: PreviewPresetButtonProps) {
   return (
     <TooltipProvider delayDuration={300}>
       <Tooltip>
@@ -42,7 +42,7 @@ export function TrialPresetButton({
           >
             <Gift className="h-4 w-4 shrink-0" />
             <span className="text-xs sm:text-sm font-medium">
-              {TRIAL_PRESET.name}
+              {PREVIEW_PRESET.name}
             </span>
             {runsRemaining !== undefined && (
               <span
@@ -59,13 +59,13 @@ export function TrialPresetButton({
           </button>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="max-w-xs">
-          <p className="text-xs">{TRIAL_PRESET.description}</p>
+          <p className="text-xs">{PREVIEW_PRESET.description}</p>
           <p className="text-xs mt-1">
-            2 efficient models, {TRIAL_PRESET.maxRounds} rounds, {TRIAL_PRESET.consensusThreshold}% threshold
+            2 efficient models, {PREVIEW_PRESET.maxRounds} rounds, {PREVIEW_PRESET.consensusThreshold}% threshold
           </p>
           {runsRemaining !== undefined && (
             <p className="text-xs mt-1 font-medium">
-              {runsRemaining} free {runsRemaining === 1 ? "run" : "runs"} remaining
+              {runsRemaining} preview {runsRemaining === 1 ? "run" : "runs"} remaining
             </p>
           )}
         </TooltipContent>

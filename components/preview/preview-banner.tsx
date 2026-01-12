@@ -1,10 +1,10 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { TrialUpgradeCta } from "./trial-upgrade-cta";
+import { PreviewUpgradeCta } from "./preview-upgrade-cta";
 import { Sparkles } from "lucide-react";
 
-interface TrialBannerProps {
+interface PreviewBannerProps {
   runsRemaining: number;
   totalAllowed: number;
   className?: string;
@@ -12,15 +12,15 @@ interface TrialBannerProps {
 
 function getMessage(runsRemaining: number): string {
   if (runsRemaining === 0) {
-    return "Free runs used";
+    return "Preview runs used";
   }
   if (runsRemaining === 1) {
-    return "Last free run";
+    return "Last preview run";
   }
-  return "Free trial";
+  return "Preview";
 }
 
-export function TrialBanner({ runsRemaining, totalAllowed, className }: TrialBannerProps) {
+export function PreviewBanner({ runsRemaining, totalAllowed, className }: PreviewBannerProps) {
   const message = getMessage(runsRemaining);
 
   return (
@@ -40,7 +40,7 @@ export function TrialBanner({ runsRemaining, totalAllowed, className }: TrialBan
           Bring your own key to access all models & presets
         </span>
       </div>
-      <TrialUpgradeCta variant="outline" size="sm" />
+      <PreviewUpgradeCta variant="outline" size="sm" />
     </div>
   );
 }
