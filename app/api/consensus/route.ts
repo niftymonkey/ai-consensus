@@ -592,6 +592,7 @@ export async function POST(request: NextRequest) {
           console.log(`[Synthesis] Generating final consensus with ${evaluatorProvider}:${evaluatorModelId}`);
 
           let finalSynthesis = "";
+          let previewUsageIncremented = false;
           await streamFinalSynthesis({
             originalPrompt: prompt,
             finalResponses: previousResponses,
@@ -601,6 +602,14 @@ export async function POST(request: NextRequest) {
             evaluatorProvider,
             evaluatorModel: evaluatorModelId,
             onChunk: (chunk) => {
+              // Increment preview usage on first synthesis chunk (proves we got a real response)
+              // Fire-and-forget to avoid blocking the stream
+              if (!previewUsageIncremented && isPreviewMode && previewUserIdentifier) {
+                previewUsageIncremented = true;
+                incrementPreviewUsage(previewUserIdentifier)
+                  .then(() => console.log(`[Consensus] Preview run counted for user=${previewUserIdentifier.substring(0, 8)}...`))
+                  .catch((err) => console.error(`[Consensus] Failed to increment preview usage:`, err));
+              }
               finalSynthesis += chunk;
               safeEnqueue({
                 type: "synthesis-chunk",
@@ -648,12 +657,6 @@ export async function POST(request: NextRequest) {
               finalScore,
               currentRound
             );
-          }
-
-          // Increment preview usage on successful completion
-          if (isPreviewMode && previewUserIdentifier) {
-            await incrementPreviewUsage(previewUserIdentifier);
-            console.log(`[Consensus] Preview run completed for user=${previewUserIdentifier.substring(0, 8)}...`);
           }
 
           // Send final responses

@@ -246,9 +246,9 @@ Return ONLY raw JSON - no markdown, no code fences, no \`\`\`json wrapper. Just 
   "areasOfAgreement": ["<what they agree on>", "<another agreement>", "..."],
   "keyDifferences": ["<dramatic difference with personality>", "<another difference>", "..."],
   "reasoning": "<2-3 casual paragraphs explaining the score>",
-  "isGoodEnough": <boolean>${searchEnabled ? `,
-  "needsMoreInfo": <optional boolean>,
-  "suggestedSearchQuery": "<optional string if needsMoreInfo is true>"` : ''}
+  "isGoodEnough": <boolean>,
+  "needsMoreInfo": <boolean>,
+  "suggestedSearchQuery": "<search query if needsMoreInfo is true, otherwise empty string>"
 }`;
 }
 

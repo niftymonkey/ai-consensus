@@ -14,9 +14,6 @@ function getMessage(runsRemaining: number): string {
   if (runsRemaining === 0) {
     return "Preview runs used";
   }
-  if (runsRemaining === 1) {
-    return "Last preview run";
-  }
   return "Preview";
 }
 

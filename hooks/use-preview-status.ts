@@ -17,6 +17,7 @@ interface UsePreviewStatusReturn {
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
+  decrementRun: () => void;
 }
 
 const DISABLED_STATUS: PreviewStatus = {
@@ -60,10 +61,23 @@ export function usePreviewStatus(): UsePreviewStatusReturn {
     fetchStatus();
   }, [fetchStatus]);
 
+  // Immediately decrement local run count (for instant UI update)
+  const decrementRun = useCallback(() => {
+    setStatus((prev) => {
+      if (!prev || prev.runsRemaining <= 0) return prev;
+      return {
+        ...prev,
+        runsUsed: prev.runsUsed + 1,
+        runsRemaining: prev.runsRemaining - 1,
+      };
+    });
+  }, []);
+
   return {
     status,
     isLoading,
     error,
     refetch: fetchStatus,
+    decrementRun,
   };
 }

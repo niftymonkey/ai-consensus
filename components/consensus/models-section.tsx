@@ -19,6 +19,8 @@ interface ModelsSectionProps {
   disabled?: boolean;
   isLoading?: boolean;
   isPreviewMode?: boolean;
+  /** Maximum number of participating models (default: 3) */
+  maxModels?: number;
 }
 
 export function ModelsSection({
@@ -31,6 +33,7 @@ export function ModelsSection({
   disabled = false,
   isLoading = false,
   isPreviewMode = false,
+  maxModels = 3,
 }: ModelsSectionProps) {
   // Filter evaluator models - in preview mode, include all models
   const evaluatorModels = useMemo(() => {
@@ -61,6 +64,7 @@ export function ModelsSection({
           setSelectedModels={setSelectedModels}
           disabled={disabled}
           isLoading={isLoading}
+          maxModels={maxModels}
         />
 
         {/* Evaluator Model */}

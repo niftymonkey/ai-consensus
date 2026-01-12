@@ -37,6 +37,17 @@ export function getModelInstance(
   provider: string,
   model: string
 ) {
+  // OpenRouter keys start with "sk-or-" - always route through OpenRouter
+  const isOpenRouterKey = apiKey.startsWith("sk-or-");
+  if (isOpenRouterKey) {
+    const openrouterProvider = createOpenRouterProvider(apiKey);
+    // Ensure OpenRouter format (provider/model)
+    const openRouterModelId = model.includes("/")
+      ? model
+      : `${provider}/${model}`;
+    return openrouterProvider.chat(openRouterModelId);
+  }
+
   // Extract the actual provider from model ID (handles OpenRouter format)
   const extractedProvider = resolveProvider(model) || provider;
 

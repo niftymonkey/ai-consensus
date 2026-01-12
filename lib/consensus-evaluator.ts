@@ -1,4 +1,4 @@
-import { streamObject, streamText } from "ai";
+import { streamObject, streamText, jsonSchema } from "ai";
 import { z } from "zod";
 import {
   buildEvaluationSystemPrompt,
@@ -96,19 +96,83 @@ export const consensusEvaluationSchema = z.object({
     .boolean()
     .describe("Whether consensus is sufficient to stop iterating (true if score >= threshold)"),
 
-  // Search request fields
+  // Search request fields (always included, but only used when search is enabled)
   needsMoreInfo: z
     .boolean()
-    .optional()
     .describe("True if any model needs more current/specific information to improve their answer"),
 
   suggestedSearchQuery: z
     .string()
-    .optional()
-    .describe("Focused web search query if needsMoreInfo is true"),
+    .describe("Focused web search query if needsMoreInfo is true, otherwise empty string"),
 });
 
 export type ConsensusEvaluation = z.infer<typeof consensusEvaluationSchema>;
+
+// JSON Schema with explicit required array for Azure/OpenRouter compatibility
+// This ensures all fields are marked as required, which some providers require
+const consensusEvaluationJsonSchema = jsonSchema<ConsensusEvaluation>({
+  type: "object",
+  properties: {
+    score: {
+      type: "number",
+      minimum: 0,
+      maximum: 100,
+      description: "Consensus score from 0-100, where 100 is perfect alignment",
+    },
+    summary: {
+      type: "string",
+      description: "1-2 sentence conversational summary in casual language",
+    },
+    emoji: {
+      type: "string",
+      description: "Single emoji: 🎉 (90-100), 👍 (75-89), 🤔 (50-74), ⚠️ (30-49), 💥 (0-29)",
+    },
+    vibe: {
+      type: "string",
+      enum: ["celebration", "agreement", "mixed", "disagreement", "clash"],
+      description: "Overall feeling: celebration (90-100), agreement (75-89), mixed (50-74), disagreement (30-49), clash (0-29)",
+    },
+    areasOfAgreement: {
+      type: "array",
+      items: { type: "string" },
+      description: "3-5 things models agree on, even if minor. Celebrate commonality first!",
+    },
+    keyDifferences: {
+      type: "array",
+      items: { type: "string" },
+      description: "3-5 dramatic differences. Use punchy, conversational language with personality",
+    },
+    reasoning: {
+      type: "string",
+      description: "2-3 paragraph conversational explanation. Friendly tone, less academic",
+    },
+    isGoodEnough: {
+      type: "boolean",
+      description: "Whether consensus is sufficient to stop iterating (true if score >= threshold)",
+    },
+    needsMoreInfo: {
+      type: "boolean",
+      description: "True if any model needs more current/specific information to improve their answer",
+    },
+    suggestedSearchQuery: {
+      type: "string",
+      description: "Focused web search query if needsMoreInfo is true, otherwise empty string",
+    },
+  },
+  required: [
+    "score",
+    "summary",
+    "emoji",
+    "vibe",
+    "areasOfAgreement",
+    "keyDifferences",
+    "reasoning",
+    "isGoodEnough",
+    "needsMoreInfo",
+    "suggestedSearchQuery",
+  ],
+  additionalProperties: false,
+});
 
 /**
  * Fallback evaluation using streamText when streamObject fails.
@@ -177,9 +241,10 @@ export async function evaluateConsensusWithStream(
   const model = getModelInstance(evaluatorApiKey, evaluatorProvider, evaluatorModel);
 
   // streamObject returns structured data incrementally
+  // Use explicit JSON Schema for Azure/OpenRouter compatibility (ensures all fields in required array)
   const result = streamObject({
     model,
-    schema: consensusEvaluationSchema,
+    schema: consensusEvaluationJsonSchema,
     system: buildEvaluationSystemPrompt(consensusThreshold, searchEnabled),
     prompt: buildEvaluationPrompt(responses, selectedModels, round),
   });

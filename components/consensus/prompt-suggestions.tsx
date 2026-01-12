@@ -26,7 +26,7 @@ interface PromptSuggestionsProps {
 const SUGGESTION_CONFIGS: SuggestionConfig[] = [
   { prompt: "Implement debounce in TypeScript", preset: "coding" },
   { prompt: "What is the meaning of life?", preset: "creative" },
-  { prompt: "How should we regulate AI?", preset: "research" },
+  { prompt: "What's the next transformative technology?", preset: "research" },
 ];
 
 export const PROMPT_SUGGESTIONS = SUGGESTION_CONFIGS.map(s => s.prompt);

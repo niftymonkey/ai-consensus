@@ -36,8 +36,8 @@ export interface ConsensusEvaluation {
   isGoodEnough: boolean;
 
   // Search request fields
-  needsMoreInfo?: boolean;
-  suggestedSearchQuery?: string;
+  needsMoreInfo: boolean;
+  suggestedSearchQuery: string;
 }
 
 export interface RoundData {

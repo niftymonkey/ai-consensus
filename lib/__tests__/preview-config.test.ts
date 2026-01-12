@@ -161,7 +161,7 @@ describe("Preview Configuration", () => {
       const { PREVIEW_CONFIG } = await import("../config/preview");
       expect(PREVIEW_CONFIG.maxRuns).toBe(3);
       expect(PREVIEW_CONFIG.maxRounds).toBe(2);
-      expect(PREVIEW_CONFIG.maxParticipants).toBe(5);
+      expect(PREVIEW_CONFIG.maxParticipants).toBe(2);
       expect(PREVIEW_CONFIG.allowedModels).toContain("openai/gpt-4o-mini");
       expect(PREVIEW_CONFIG.allowedModels).toContain("anthropic/claude-3.5-haiku");
     });

@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { CustomErrorToast } from "@/components/ui/custom-error-toast";
 import posthog from "posthog-js";
 import { PRESETS, resolvePreset, type PresetId } from "@/lib/presets";
+import { PREVIEW_PRESET, resolvePreviewPreset } from "@/lib/preview-preset";
 import type {
   ModelSelection,
   RoundData,
@@ -48,7 +49,7 @@ export default function ConsensusPage() {
   } = useModels();
 
   // Preview status (for users without API keys)
-  const { status: previewStatus, isLoading: previewLoading, refetch: refetchPreview } = usePreviewStatus();
+  const { status: previewStatus, isLoading: previewLoading, decrementRun: decrementPreviewRun } = usePreviewStatus();
 
   // Check for API key updates and refetch if needed
   useEffect(() => {
@@ -157,6 +158,7 @@ export default function ConsensusPage() {
   const currentSearchDataRef = useRef<import("@/lib/types").SearchData | null>(null);
   const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const previewRefetchedRef = useRef<boolean>(false);
 
   // Auto-scroll hook
   const { scrollToBottom, enabled: autoScrollEnabled, isUserScrolling, toggleEnabled, pauseAutoScroll, resumeAutoScroll } = useAutoScroll();
@@ -261,10 +263,35 @@ export default function ConsensusPage() {
       // If localStorage fails, continue with preset
     }
 
-    // In preview mode, use "casual" preset (within preview limits)
+    // In preview mode, use preview preset values directly
     // Otherwise use "balanced" preset
     const inPreviewMode = !hasAnyKey && previewStatus?.enabled && (previewStatus?.runsRemaining ?? 0) > 0;
-    applyPreset(inPreviewMode ? "casual" : "balanced");
+
+    if (inPreviewMode) {
+      // Apply preview preset directly (uses PREVIEW_PRESET values like 95% threshold)
+      const resolved = resolvePreviewPreset(models);
+      setMaxRounds(PREVIEW_PRESET.maxRounds);
+      setConsensusThreshold(PREVIEW_PRESET.consensusThreshold);
+      setEnableSearch(false);
+
+      const modelSelections: ModelSelection[] = resolved.selectedModels.map((m, i) => ({
+        id: `model-${i + 1}`,
+        provider: m.provider,
+        modelId: m.id,
+        label: m.shortName,
+      }));
+      setSelectedModels(modelSelections);
+
+      if (resolved.evaluatorModel) {
+        setEvaluatorModel(resolved.evaluatorModel.id);
+      }
+
+      setSelectedPresetId("casual"); // Show as casual in UI
+      setPresetModelIds(modelSelections.map(m => m.modelId));
+      setSettingsExpanded(false);
+    } else {
+      applyPreset("balanced");
+    }
   }, [models, selectedModels.length, applyPreset, hasAnyKey, previewStatus]);
 
   // Initialize default models when models are loaded (only if no saved preferences)
@@ -631,6 +658,7 @@ export default function ConsensusPage() {
       case "start":
         setConversationId(event.conversationId);
         setOverallStatus("Starting consensus generation...");
+        previewRefetchedRef.current = false; // Reset for new run
         break;
 
       case "round-status":
@@ -737,6 +765,8 @@ export default function ConsensusPage() {
               keyDifferences: currentEvaluationRef.current.keyDifferences || [],
               reasoning: currentEvaluationRef.current.reasoning || "",
               isGoodEnough: currentEvaluationRef.current.isGoodEnough || false,
+              needsMoreInfo: currentEvaluationRef.current.needsMoreInfo || false,
+              suggestedSearchQuery: currentEvaluationRef.current.suggestedSearchQuery || "",
             },
             refinementPrompts: event.data,
             searchData: currentSearchDataRef.current || undefined,
@@ -760,6 +790,8 @@ export default function ConsensusPage() {
               keyDifferences: currentEvaluationRef.current.keyDifferences || [],
               reasoning: currentEvaluationRef.current.reasoning || "",
               isGoodEnough: currentEvaluationRef.current.isGoodEnough || false,
+              needsMoreInfo: currentEvaluationRef.current.needsMoreInfo || false,
+              suggestedSearchQuery: currentEvaluationRef.current.suggestedSearchQuery || "",
             },
             searchData: currentSearchDataRef.current || undefined,
           };
@@ -773,6 +805,11 @@ export default function ConsensusPage() {
         break;
 
       case "synthesis-chunk":
+        // Decrement preview run count on first chunk (instant UI update)
+        if (!previewRefetchedRef.current) {
+          previewRefetchedRef.current = true;
+          decrementPreviewRun();
+        }
         setFinalConsensus((prev) => (prev || "") + event.content);
         setOverallStatus("Generating final consensus...");
         // Trigger auto-scroll for streaming consensus
@@ -973,7 +1010,7 @@ export default function ConsensusPage() {
         {/* Preview Status Banner */}
         {isPreviewMode && (
           <div className="mx-auto w-full max-w-4xl">
-            <PreviewStatusBanner />
+            <PreviewStatusBanner status={previewStatus} isLoading={previewLoading} />
           </div>
         )}
 

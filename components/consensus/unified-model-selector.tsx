@@ -15,6 +15,8 @@ interface UnifiedModelSelectorProps {
   setSelectedModels: (models: ModelSelection[]) => void;
   disabled?: boolean;
   isLoading?: boolean;
+  /** Maximum number of models allowed (default: 3) */
+  maxModels?: number;
 }
 
 export function UnifiedModelSelector({
@@ -24,9 +26,10 @@ export function UnifiedModelSelector({
   setSelectedModels,
   disabled = false,
   isLoading = false,
+  maxModels = 3,
 }: UnifiedModelSelectorProps) {
   function addModel() {
-    if (selectedModels.length >= 3) return;
+    if (selectedModels.length >= maxModels) return;
     if (models.length === 0) return;
 
     // Find a model that isn't already selected
@@ -120,7 +123,7 @@ export function UnifiedModelSelector({
         ))}
 
         {/* Add Model Button */}
-        {selectedModels.length < 3 && (
+        {selectedModels.length < maxModels && (
           <Button
             variant="outline"
             onClick={addModel}

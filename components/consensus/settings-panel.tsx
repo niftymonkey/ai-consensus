@@ -305,6 +305,7 @@ export function SettingsPanel({
           disabled={disabled}
           isLoading={openRouterLoading}
           isPreviewMode={previewConstraints !== null}
+          maxModels={previewConstraints?.maxParticipants}
         />
 
         {/* Process Section */}

@@ -31,7 +31,7 @@ export const PREVIEW_PRESET: PreviewPresetDefinition = {
   icon: "Gift",
   modelCount: 2,
   maxRounds: PREVIEW_CONFIG.maxRounds,
-  consensusThreshold: 80,
+  consensusThreshold: 95,
   allowedModelIds: PREVIEW_ALLOWED_MODELS,
 };
 

@@ -72,7 +72,7 @@ export const PREVIEW_CONFIG = {
   maxRounds: 2,
 
   /** Maximum participants (AI models) per evaluation in preview mode */
-  maxParticipants: 5,
+  maxParticipants: 2,
 
   /** Models allowed in preview mode */
   allowedModels: PREVIEW_ALLOWED_MODELS,
