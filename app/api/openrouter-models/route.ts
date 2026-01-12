@@ -1,21 +1,34 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   fetchOpenRouterModels,
   groupModelsByProvider,
   getProviders,
 } from "@/lib/openrouter-models";
+import { TRIAL_ALLOWED_MODELS, isModelAllowedInTrial } from "@/lib/config/trial";
 
 export const runtime = "nodejs";
 
 /**
  * GET /api/openrouter-models
  *
- * Returns the full OpenRouter model catalog, grouped by provider.
+ * Returns the OpenRouter model catalog, grouped by provider.
  * This is public data from OpenRouter's API - no auth required.
+ *
+ * Query params:
+ * - trial=true: Filter to only trial-allowed models
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const models = await fetchOpenRouterModels();
+    const { searchParams } = new URL(request.url);
+    const isTrialMode = searchParams.get("trial") === "true";
+
+    let models = await fetchOpenRouterModels();
+
+    // Filter to trial-allowed models if in trial mode
+    if (isTrialMode) {
+      models = models.filter((model) => isModelAllowedInTrial(model.id));
+    }
+
     const grouped = groupModelsByProvider(models);
     const providers = getProviders(models);
 
@@ -26,6 +39,8 @@ export async function GET() {
         providers,
         count: models.length,
         timestamp: new Date().toISOString(),
+        isTrialMode,
+        ...(isTrialMode && { trialAllowedModels: TRIAL_ALLOWED_MODELS }),
       },
       {
         headers: {
