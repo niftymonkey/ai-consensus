@@ -49,20 +49,29 @@ const BENEFITS = [
   },
 ];
 
+interface PreviewUpgradeCardProps {
+  hasKeys?: boolean;
+}
+
 /**
  * Shows upgrade messaging for preview users on the settings page.
- * Only renders for users in preview mode.
+ * Only renders for users in preview mode who haven't configured API keys yet.
  */
-export function PreviewUpgradeCard() {
+export function PreviewUpgradeCard({ hasKeys = false }: PreviewUpgradeCardProps) {
   const { status, isLoading } = usePreviewStatus();
 
-  // Loading state
+  // Don't show anything while loading - prevents flash
   if (isLoading) {
-    return <Skeleton className="h-48 w-full rounded-lg" />;
+    return null;
   }
 
   // Not in preview mode - don't show upgrade card
   if (!status?.enabled) {
+    return null;
+  }
+
+  // User has configured API keys - don't show upgrade card
+  if (hasKeys) {
     return null;
   }
 

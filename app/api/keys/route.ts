@@ -11,7 +11,16 @@ export async function GET() {
   const session = await auth();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Return empty keys for unauthenticated users (enables preview mode)
+    return NextResponse.json({
+      keys: {
+        anthropic: null,
+        openai: null,
+        google: null,
+        tavily: null,
+        openrouter: null,
+      },
+    });
   }
 
   // Return empty keys in E2E tests when no database is available

@@ -15,9 +15,10 @@ interface ConsensusInputProps {
   onSubmitWithPreset?: (prompt: string, presetId: PresetId) => void;
   showSuggestions?: boolean;
   isPreviewMode?: boolean;
+  isPreviewExhausted?: boolean;
 }
 
-export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmitWithPrompt, onPresetSelect, onSubmitWithPreset, showSuggestions = false, isPreviewMode = false }: ConsensusInputProps) {
+export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmitWithPrompt, onPresetSelect, onSubmitWithPreset, showSuggestions = false, isPreviewMode = false, isPreviewExhausted = false }: ConsensusInputProps) {
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -64,7 +65,7 @@ export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmi
               onKeyDown={handleKeyDown}
               placeholder="What would you like to ask?"
               rows={4}
-              disabled={isLoading}
+              disabled={isLoading || isPreviewExhausted}
             />
           </div>
           {showSuggestions && (
@@ -81,9 +82,9 @@ export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmi
             </p>
             <Button
               type="submit"
-              disabled={isLoading || !prompt.trim()}
+              disabled={isLoading || isPreviewExhausted || !prompt.trim()}
             >
-              {isLoading ? "Asking..." : "Ask"}
+              {isLoading && !isPreviewExhausted ? "Asking..." : "Ask"}
             </Button>
           </div>
         </CardContent>

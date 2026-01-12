@@ -20,6 +20,8 @@ import { ProcessSection } from "./process-section";
 import { PRESETS, type PresetId } from "@/lib/presets";
 import type { ModelSelection } from "@/lib/types";
 import type { OpenRouterModelWithMeta } from "@/lib/openrouter-models";
+import { getRecommendedEvaluatorModels } from "@/lib/openrouter-models";
+import { filterEvaluatorModels } from "@/lib/model-filtering";
 
 // Map icon names to Lucide components for collapsed state
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -124,11 +126,12 @@ export function SettingsPanel({
 
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
+
       if (stored) {
         const prefs: ConsensusPreferences = JSON.parse(stored);
+        const availableModelIds = new Set(openRouterModels.map((m) => m.id));
 
         if (prefs.models && prefs.models.length >= 2) {
-          const availableModelIds = new Set(openRouterModels.map((m) => m.id));
           const validModels = prefs.models.filter((m) =>
             availableModelIds.has(m.modelId)
           );
@@ -148,7 +151,23 @@ export function SettingsPanel({
 
         setMaxRounds(prefs.maxRounds);
         setConsensusThreshold(prefs.threshold);
-        setEvaluatorModel(prefs.evaluatorModel);
+
+        // Restore evaluator if valid in the FILTERED evaluator list
+        // (non-preview mode filters out mini/haiku/flash models)
+        const isPreview = previewConstraints !== null;
+        const filteredEvaluatorModels = filterEvaluatorModels(openRouterModels, isPreview);
+        const filteredEvaluatorIds = new Set(filteredEvaluatorModels.map(m => m.id));
+        const evaluatorExists = prefs.evaluatorModel && filteredEvaluatorIds.has(prefs.evaluatorModel);
+
+        if (evaluatorExists) {
+          setEvaluatorModel(prefs.evaluatorModel);
+        } else if (filteredEvaluatorModels.length > 0) {
+          // Stored evaluator not in filtered list - use top recommended
+          const recommended = getRecommendedEvaluatorModels(openRouterModels, 1);
+          const fallback = recommended[0] ?? filteredEvaluatorModels[0].id;
+          setEvaluatorModel(fallback);
+        }
+
         if (prefs.enableSearch !== undefined && availableKeys.tavily) {
           setEnableSearch(prefs.enableSearch);
         }
@@ -162,7 +181,7 @@ export function SettingsPanel({
       console.error("Failed to load consensus preferences:", error);
       setHasLoadedPreferences(true);
     }
-  }, [hasLoadedPreferences, setIsExpanded, openRouterLoading, openRouterModels, availableKeys.tavily, setSelectedModels, setMaxRounds, setConsensusThreshold, setEvaluatorModel, setEnableSearch]);
+  }, [hasLoadedPreferences, setIsExpanded, openRouterLoading, openRouterModels, availableKeys.tavily, setSelectedModels, setMaxRounds, setConsensusThreshold, setEvaluatorModel, setEnableSearch, previewConstraints]);
 
   // Save preferences
   const savePreferences = useCallback(() => {

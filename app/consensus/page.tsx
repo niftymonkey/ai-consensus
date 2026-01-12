@@ -12,7 +12,7 @@ import { AutoScrollToggle } from "@/components/consensus/auto-scroll-toggle";
 import { useModels } from "@/hooks/use-models";
 import { useAutoScroll } from "@/hooks/use-auto-scroll";
 import { usePreviewStatus } from "@/hooks/use-preview-status";
-import { PreviewStatusBanner } from "@/components/preview";
+import { PreviewStatusBanner, PreviewExhaustedCard } from "@/components/preview";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { CustomErrorToast } from "@/components/ui/custom-error-toast";
@@ -216,9 +216,6 @@ export default function ConsensusPage() {
       setSelectedPresetId(presetId);
       setPresetModelIds(modelSelections.map(m => m.modelId));
 
-      // Collapse settings panel after applying preset
-      setSettingsExpanded(false);
-
       // Track preset selection
       posthog.capture("preset_selected", {
         preset_id: presetId,
@@ -367,9 +364,11 @@ export default function ConsensusPage() {
 
       // In preview mode, prefer GPT-4o-mini (cheaper) as evaluator
       const inPreviewMode = !hasAnyKey && previewStatus?.enabled && (previewStatus?.runsRemaining ?? 0) > 0;
+
       if (inPreviewMode && models.length > 0) {
         const gpt4oMini = models.find(m => m.id.includes("gpt-4o-mini"));
-        setEvaluatorModel(gpt4oMini?.id ?? models[0].id);
+        const chosen = gpt4oMini?.id ?? models[0].id;
+        setEvaluatorModel(chosen);
         return;
       }
 
@@ -482,13 +481,6 @@ export default function ConsensusPage() {
       });
       return;
     }
-
-    // Log models being used
-    console.log('=== Starting Consensus Evaluation ===');
-    console.log('Selected models:', modelsToUse.map(m => `${m.provider}:${m.modelId} (${m.label})`));
-    console.log('Evaluator model:', evaluatorToUse);
-    console.log('Max rounds:', maxRoundsToUse);
-    console.log('Consensus threshold:', thresholdToUse + '%');
 
     // Track consensus started (conversion event)
     posthog.capture("consensus_started", {
@@ -952,6 +944,12 @@ export default function ConsensusPage() {
   // Determine if user is in preview mode (no keys but preview available)
   const isPreviewMode = !hasAnyKey && previewStatus?.enabled && (previewStatus?.runsRemaining ?? 0) > 0;
 
+  // Preview exhausted: had preview access but used all runs
+  const isPreviewExhausted = !hasAnyKey && !!previewStatus?.enabled && (previewStatus?.runsRemaining ?? 0) === 0;
+
+  // Keep showing UI if we have results or are processing (even if preview just hit 0)
+  const hasActiveSession = isProcessing || finalConsensus !== null;
+
   // Build preview constraints for PresetSelector when in preview mode
   const previewConstraints = isPreviewMode && previewStatus?.constraints ? {
     maxRounds: previewStatus.constraints.maxRounds,
@@ -970,12 +968,18 @@ export default function ConsensusPage() {
   }
 
   // No keys and no preview available - show upgrade prompt
-  if (!hasAnyKey && !isPreviewMode) {
+  // But keep showing UI if we have an active session (processing or results)
+  if (!hasAnyKey && !isPreviewMode && !hasActiveSession) {
     return (
       <div className="container py-4 md:py-12 px-2 md:px-4">
         <div className="space-y-6">
-          <ConsensusHeader keyCount={keyCount} />
-          <NoKeysAlert />
+          {/* Hide header when showing PreviewExhaustedCard - card is self-contained */}
+          {!isPreviewExhausted && <ConsensusHeader keyCount={keyCount} />}
+          {isPreviewExhausted ? (
+            <PreviewExhaustedCard />
+          ) : (
+            <NoKeysAlert />
+          )}
         </div>
       </div>
     );
@@ -1007,8 +1011,8 @@ export default function ConsensusPage() {
 
       <div className="space-y-3">
 
-        {/* Preview Status Banner */}
-        {isPreviewMode && (
+        {/* Preview Status Banner - show during preview mode OR when exhausted with active session */}
+        {(isPreviewMode || (isPreviewExhausted && hasActiveSession)) && (
           <div className="mx-auto w-full max-w-4xl">
             <PreviewStatusBanner status={previewStatus} isLoading={previewLoading} />
           </div>
@@ -1024,8 +1028,9 @@ export default function ConsensusPage() {
             onSubmitWithPrompt={submitConsensus}
             onPresetSelect={applyPreset}
             onSubmitWithPreset={handleSubmitWithPreset}
-            showSuggestions={!finalConsensus}
+            showSuggestions={!finalConsensus && !isPreviewExhausted}
             isPreviewMode={isPreviewMode}
+            isPreviewExhausted={isPreviewExhausted}
           />
         </div>
 
@@ -1044,7 +1049,7 @@ export default function ConsensusPage() {
               setEvaluatorModel={setEvaluatorModel}
               enableSearch={enableSearch}
               setEnableSearch={setEnableSearch}
-              disabled={isProcessing || isSynthesizing || isGeneratingProgression}
+              disabled={isProcessing || isSynthesizing || isGeneratingProgression || isPreviewExhausted}
               isProcessing={isProcessing || isSynthesizing || isGeneratingProgression}
               isExpanded={settingsExpanded}
               setIsExpanded={setSettingsExpanded}

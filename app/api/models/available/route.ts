@@ -44,8 +44,50 @@ export async function GET() {
 
   const session = await auth();
 
+  // For unauthenticated users, return preview models if preview is enabled
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (isPreviewEnabled()) {
+      const catalog = await fetchOpenRouterModels();
+      const previewModels = catalog.filter(model =>
+        PREVIEW_ALLOWED_MODELS.includes(model.id as typeof PREVIEW_ALLOWED_MODELS[number])
+      );
+
+      return NextResponse.json(
+        {
+          models: previewModels,
+          hasKeys: {
+            anthropic: false,
+            openai: false,
+            google: false,
+            tavily: false,
+            openrouter: false,
+          },
+          providerModels: null,
+          errors: {},
+          previewMode: true,
+          timestamp: new Date().toISOString(),
+        },
+        { status: 200 }
+      );
+    }
+
+    // Preview not enabled, return empty models
+    return NextResponse.json(
+      {
+        models: [],
+        hasKeys: {
+          anthropic: false,
+          openai: false,
+          google: false,
+          tavily: false,
+          openrouter: false,
+        },
+        providerModels: null,
+        errors: {},
+        timestamp: new Date().toISOString(),
+      },
+      { status: 200 }
+    );
   }
 
   try {
