@@ -195,7 +195,8 @@ export default function ConsensusPage() {
       // Set settings from preset
       setMaxRounds(preset.maxRounds);
       setConsensusThreshold(preset.consensusThreshold);
-      setEnableSearch(preset.enableSearch || false);
+      // Only enable search if preset wants it AND user has Tavily key
+      setEnableSearch((preset.enableSearch || false) && !!hasKeys?.tavily);
 
       // Set selected models
       const modelSelections: ModelSelection[] = resolved.selectedModels.map((m, i) => ({
@@ -231,7 +232,7 @@ export default function ConsensusPage() {
         maxRounds: preset.maxRounds,
         consensusThreshold: preset.consensusThreshold,
         evaluatorModel: evaluatorId,
-        enableSearch: preset.enableSearch || false,
+        enableSearch: (preset.enableSearch || false) && !!hasKeys?.tavily,
       };
     } catch (error) {
       console.error("Failed to apply preset:", error);
@@ -240,7 +241,7 @@ export default function ConsensusPage() {
       });
       return null;
     }
-  }, [models, evaluatorModel]);
+  }, [models, evaluatorModel, hasKeys]);
 
   // Initialize with appropriate preset on first load (only if no saved preferences)
   useEffect(() => {
