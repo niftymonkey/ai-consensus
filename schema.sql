@@ -88,3 +88,16 @@ CREATE TABLE IF NOT EXISTS consensus_rounds (
 
 CREATE INDEX IF NOT EXISTS idx_consensus_rounds_conversation
   ON consensus_rounds(conversation_id);
+
+-- Preview Usage Tracking
+-- Tracks preview runs per user (identified by hashed IP address)
+CREATE TABLE IF NOT EXISTS preview_usage (
+  id SERIAL PRIMARY KEY,
+  user_identifier VARCHAR(64) NOT NULL UNIQUE,  -- SHA-256 hash of IP (64 hex chars)
+  runs_used INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_preview_usage_user_identifier
+  ON preview_usage(user_identifier);

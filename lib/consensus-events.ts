@@ -64,7 +64,7 @@ export interface FinalData {
 
 // Discriminated union for all possible events
 export type ConsensusEvent =
-  | { type: "start"; conversationId: number }
+  | { type: "start"; conversationId: number | null } // null for preview mode
   | { type: "round-status"; data: RoundStatusData }
   | { type: "search-start"; data: SearchStartData }
   | { type: "search-complete"; data: SearchCompleteData }

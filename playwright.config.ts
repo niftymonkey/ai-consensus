@@ -33,9 +33,10 @@ export default defineConfig({
   },
   projects: [
     // Unauthenticated tests - run first, no auth needed
+    // Includes preview tests since preview mode works without authentication
     {
       name: "unauthenticated",
-      testMatch: /\/auth\.spec\.ts$/,
+      testMatch: /\/(auth|preview)\.spec\.ts$/,
       use: { ...devices["Desktop Chrome"] },
     },
     // Auth setup project - authenticates and saves state, runs after unauthenticated

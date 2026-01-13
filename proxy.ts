@@ -5,14 +5,12 @@ import { auth } from "@/lib/auth";
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Protect /consensus and /settings routes
+  // Protect /settings route (requires auth to save API keys)
+  // Note: /consensus is NOT protected - allows unauthenticated preview mode access
   const session = await auth();
-  if (
-    !session &&
-    (pathname.startsWith("/consensus") || pathname.startsWith("/settings"))
-  ) {
-    const signInUrl = new URL("/api/auth/signin", request.url);
-    signInUrl.searchParams.set("callbackUrl", request.url);
+  if (!session && pathname.startsWith("/settings")) {
+    const signInUrl = new URL("/signin", request.url);
+    signInUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(signInUrl);
   }
 
@@ -20,5 +18,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/consensus/:path*", "/settings/:path*"],
+  matcher: ["/settings/:path*"],
 };

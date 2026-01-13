@@ -20,6 +20,8 @@ import { ProcessSection } from "./process-section";
 import { PRESETS, type PresetId } from "@/lib/presets";
 import type { ModelSelection } from "@/lib/types";
 import type { OpenRouterModelWithMeta } from "@/lib/openrouter-models";
+import { getRecommendedEvaluatorModels } from "@/lib/openrouter-models";
+import { filterEvaluatorModels } from "@/lib/model-filtering";
 
 // Map icon names to Lucide components for collapsed state
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -49,6 +51,12 @@ interface ConsensusPreferences {
   lastUpdated: number;
 }
 
+interface PreviewConstraints {
+  maxRounds: number;
+  maxParticipants: number;
+  allowsSearch: boolean;
+}
+
 interface SettingsPanelProps {
   availableKeys: AvailableKeys;
   selectedModels: ModelSelection[];
@@ -71,6 +79,7 @@ interface SettingsPanelProps {
   activePreset: PresetId | null;
   presetModelIds: string[];
   onPresetSelect: (presetId: PresetId) => void;
+  previewConstraints?: PreviewConstraints | null;
 }
 
 const STORAGE_KEY = "consensusPreferences";
@@ -97,6 +106,7 @@ export function SettingsPanel({
   activePreset,
   presetModelIds,
   onPresetSelect,
+  previewConstraints = null,
 }: SettingsPanelProps) {
   const [hasLoadedPreferences, setHasLoadedPreferences] = useState(false);
   const [skipNextSave, setSkipNextSave] = useState(false);
@@ -116,11 +126,12 @@ export function SettingsPanel({
 
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
+
       if (stored) {
         const prefs: ConsensusPreferences = JSON.parse(stored);
+        const availableModelIds = new Set(openRouterModels.map((m) => m.id));
 
         if (prefs.models && prefs.models.length >= 2) {
-          const availableModelIds = new Set(openRouterModels.map((m) => m.id));
           const validModels = prefs.models.filter((m) =>
             availableModelIds.has(m.modelId)
           );
@@ -138,9 +149,32 @@ export function SettingsPanel({
           }
         }
 
-        setMaxRounds(prefs.maxRounds);
-        setConsensusThreshold(prefs.threshold);
-        setEvaluatorModel(prefs.evaluatorModel);
+        // In preview mode, clamp values to preview constraints
+        if (previewConstraints) {
+          setMaxRounds(Math.min(prefs.maxRounds, previewConstraints.maxRounds));
+          // Use preview threshold (95%) to encourage multi-round discussions
+          setConsensusThreshold(95);
+        } else {
+          setMaxRounds(prefs.maxRounds);
+          setConsensusThreshold(prefs.threshold);
+        }
+
+        // Restore evaluator if valid in the FILTERED evaluator list
+        // (non-preview mode filters out mini/haiku/flash models)
+        const isPreview = previewConstraints !== null;
+        const filteredEvaluatorModels = filterEvaluatorModels(openRouterModels, isPreview);
+        const filteredEvaluatorIds = new Set(filteredEvaluatorModels.map(m => m.id));
+        const evaluatorExists = prefs.evaluatorModel && filteredEvaluatorIds.has(prefs.evaluatorModel);
+
+        if (evaluatorExists) {
+          setEvaluatorModel(prefs.evaluatorModel);
+        } else if (filteredEvaluatorModels.length > 0) {
+          // Stored evaluator not in filtered list - use top recommended
+          const recommended = getRecommendedEvaluatorModels(openRouterModels, 1);
+          const fallback = recommended[0] ?? filteredEvaluatorModels[0].id;
+          setEvaluatorModel(fallback);
+        }
+
         if (prefs.enableSearch !== undefined && availableKeys.tavily) {
           setEnableSearch(prefs.enableSearch);
         }
@@ -154,7 +188,22 @@ export function SettingsPanel({
       console.error("Failed to load consensus preferences:", error);
       setHasLoadedPreferences(true);
     }
-  }, [hasLoadedPreferences, setIsExpanded, openRouterLoading, openRouterModels, availableKeys.tavily, setSelectedModels, setMaxRounds, setConsensusThreshold, setEvaluatorModel, setEnableSearch]);
+  }, [hasLoadedPreferences, setIsExpanded, openRouterLoading, openRouterModels, availableKeys.tavily, setSelectedModels, setMaxRounds, setConsensusThreshold, setEvaluatorModel, setEnableSearch, previewConstraints]);
+
+  // Enforce preview constraints whenever they become available
+  // This handles the case where preferences were restored before preview status was known
+  useEffect(() => {
+    if (previewConstraints && hasLoadedPreferences) {
+      // Clamp maxRounds to preview limit
+      if (maxRounds > previewConstraints.maxRounds) {
+        setMaxRounds(previewConstraints.maxRounds);
+      }
+      // Enforce preview threshold (95%)
+      if (consensusThreshold !== 95) {
+        setConsensusThreshold(95);
+      }
+    }
+  }, [previewConstraints, hasLoadedPreferences, maxRounds, consensusThreshold, setMaxRounds, setConsensusThreshold]);
 
   // Save preferences
   const savePreferences = useCallback(() => {
@@ -283,6 +332,7 @@ export function SettingsPanel({
           activePreset={activePreset}
           onPresetSelect={onPresetSelect}
           disabled={disabled}
+          previewConstraints={previewConstraints}
         />
 
         {/* Models Section */}
@@ -295,6 +345,8 @@ export function SettingsPanel({
           setEvaluatorModel={setEvaluatorModel}
           disabled={disabled}
           isLoading={openRouterLoading}
+          isPreviewMode={previewConstraints !== null}
+          maxModels={previewConstraints?.maxParticipants}
         />
 
         {/* Process Section */}
@@ -307,6 +359,7 @@ export function SettingsPanel({
           setEnableSearch={handleSearchToggle}
           hasTavilyKey={availableKeys.tavily}
           disabled={disabled}
+          maxRoundsLimit={previewConstraints?.maxRounds}
         />
       </CardContent>
     </Card>

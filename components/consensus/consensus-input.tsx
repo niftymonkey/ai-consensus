@@ -14,9 +14,11 @@ interface ConsensusInputProps {
   onPresetSelect?: (presetId: PresetId) => void;
   onSubmitWithPreset?: (prompt: string, presetId: PresetId) => void;
   showSuggestions?: boolean;
+  isPreviewMode?: boolean;
+  isPreviewExhausted?: boolean;
 }
 
-export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmitWithPrompt, onPresetSelect, onSubmitWithPreset, showSuggestions = false }: ConsensusInputProps) {
+export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmitWithPrompt, onPresetSelect, onSubmitWithPreset, showSuggestions = false, isPreviewMode = false, isPreviewExhausted = false }: ConsensusInputProps) {
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -29,6 +31,13 @@ export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmi
 
   const handleSuggestionSelect = (suggestion: string, preset: PresetId) => {
     setPrompt(suggestion);
+    // In preview mode, just submit with current settings (don't try to apply preset)
+    if (isPreviewMode) {
+      if (onSubmitWithPrompt) {
+        onSubmitWithPrompt(suggestion);
+      }
+      return;
+    }
     // Use the combined callback if available (handles preset + submit atomically)
     if (onSubmitWithPreset) {
       onSubmitWithPreset(suggestion, preset);
@@ -56,7 +65,7 @@ export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmi
               onKeyDown={handleKeyDown}
               placeholder="What would you like to ask?"
               rows={4}
-              disabled={isLoading}
+              disabled={isLoading || isPreviewExhausted}
             />
           </div>
           {showSuggestions && (
@@ -64,6 +73,7 @@ export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmi
               onSelect={handleSuggestionSelect}
               disabled={isLoading}
               show={!prompt.trim()}
+              isPreviewMode={isPreviewMode}
             />
           )}
           <div className="flex items-center justify-between">
@@ -72,9 +82,9 @@ export function ConsensusInput({ prompt, setPrompt, isLoading, onSubmit, onSubmi
             </p>
             <Button
               type="submit"
-              disabled={isLoading || !prompt.trim()}
+              disabled={isLoading || isPreviewExhausted || !prompt.trim()}
             >
-              {isLoading ? "Asking..." : "Ask"}
+              {isLoading && !isPreviewExhausted ? "Asking..." : "Ask"}
             </Button>
           </div>
         </CardContent>

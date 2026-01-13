@@ -98,11 +98,10 @@ test.describe("Authentication Flow", () => {
       await expect(page).toHaveURL("/");
     });
 
-    test("consensus page redirects unauthenticated users", async ({ page }) => {
+    test("consensus page is accessible without authentication (preview mode)", async ({ page }) => {
       await page.goto("/consensus");
-      // Wait for redirect to complete
-      await page.waitForURL(/\/signin/);
-      await expect(page).toHaveURL(/\/signin/);
+      // Should stay on consensus page, not redirect to signin
+      await expect(page).toHaveURL(/\/consensus/);
     });
 
     test("settings page redirects unauthenticated users", async ({ page }) => {

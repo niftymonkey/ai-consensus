@@ -19,20 +19,21 @@ interface PromptSuggestionsProps {
   onSelect: (prompt: string, preset: PresetId) => void;
   disabled?: boolean;
   show?: boolean;
+  isPreviewMode?: boolean;
 }
 
 // Map each suggestion to its ideal preset
 const SUGGESTION_CONFIGS: SuggestionConfig[] = [
   { prompt: "Implement debounce in TypeScript", preset: "coding" },
   { prompt: "What is the meaning of life?", preset: "creative" },
-  { prompt: "How should we regulate AI?", preset: "research" },
+  { prompt: "What's the next transformative technology?", preset: "research" },
 ];
 
 export const PROMPT_SUGGESTIONS = SUGGESTION_CONFIGS.map(s => s.prompt);
 
 const STORAGE_KEY = "usedPromptSuggestions";
 
-export function PromptSuggestions({ onSelect, disabled, show = true }: PromptSuggestionsProps) {
+export function PromptSuggestions({ onSelect, disabled, show = true, isPreviewMode = false }: PromptSuggestionsProps) {
   const [usedSuggestions, setUsedSuggestions] = useState<Set<string>>(new Set());
 
   // Load used suggestions from localStorage on mount
@@ -94,7 +95,9 @@ export function PromptSuggestions({ onSelect, disabled, show = true }: PromptSug
                 </button>
               </TooltipTrigger>
               <TooltipContent>
-                Uses {presetName} preset
+                {isPreviewMode && config.preset !== "casual"
+                  ? `Normally uses ${presetName} preset`
+                  : `Uses ${presetName} preset`}
               </TooltipContent>
             </Tooltip>
           );

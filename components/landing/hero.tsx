@@ -31,7 +31,7 @@ export function Hero({ isSignedIn }: HeroProps) {
 
       <div className="mx-auto max-w-4xl text-center">
         {/* Main headline */}
-        <h1 className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl xl:text-7xl animate-in fade-in slide-in-from-bottom-3 duration-500">
+        <h1 className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl xl:text-7xl animate-in fade-in zoom-in-95 duration-700 fill-mode-both">
           <span className="block">Stop choosing between</span>
           <span className="block mt-1 sm:mt-2">
             <span className="relative inline-block">
@@ -43,13 +43,13 @@ export function Hero({ isSignedIn }: HeroProps) {
         </h1>
 
         {/* Subheadline */}
-        <p className="mt-6 sm:mt-8 text-lg sm:text-xl lg:text-2xl text-muted-foreground max-w-2xl mx-auto leading-relaxed animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
+        <p className="mt-6 sm:mt-8 text-lg sm:text-xl lg:text-2xl text-muted-foreground max-w-2xl mx-auto leading-relaxed animate-in fade-in zoom-in-95 duration-700 delay-300 fill-mode-both">
           AI Consensus makes multiple AI models work together on your questions,
           refining their reasoning across multiple rounds. One answer. Multiple perspectives.
         </p>
 
         {/* CTA Buttons */}
-        <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom-5 duration-500 delay-200">
+        <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 animate-in fade-in zoom-in-95 duration-700 delay-500 fill-mode-both">
           <Button
             size="lg"
             className="h-12 px-8 text-base font-medium gap-2 shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all duration-300"
@@ -75,7 +75,7 @@ export function Hero({ isSignedIn }: HeroProps) {
         </div>
 
         {/* Trust indicator */}
-        <p className="mt-8 text-sm text-muted-foreground/70 animate-in fade-in duration-500 delay-300">
+        <p className="mt-8 text-sm text-muted-foreground/70 animate-in fade-in zoom-in-95 duration-700 delay-700 fill-mode-both">
           200+ models via OpenRouter &middot; Bring your own keys &middot; Open source
         </p>
       </div>

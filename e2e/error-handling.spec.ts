@@ -80,7 +80,7 @@ test.describe("Error Handling", () => {
 
       // When models API fails, hasKeys is unknown, so NoKeysAlert is shown
       // This is graceful degradation - page doesn't crash, shows actionable UI
-      await expect(page.getByText("No API Keys Configured")).toBeVisible();
+      await expect(page.getByText("Bring Your Own Key")).toBeVisible();
     });
   });
 

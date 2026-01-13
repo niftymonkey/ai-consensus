@@ -313,6 +313,20 @@ test.describe("No API Keys State", () => {
       });
     });
 
+    // Mock preview endpoint - preview disabled
+    await page.route("**/api/preview", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          enabled: false,
+          runsRemaining: 0,
+          runsUsed: 0,
+          constraints: null,
+        }),
+      });
+    });
+
     // Mock available models endpoint - no keys configured, no models
     await page.route("**/api/models/available", async (route) => {
       await route.fulfill({
@@ -337,7 +351,7 @@ test.describe("No API Keys State", () => {
     await page.goto("/consensus");
 
     // Should show the NoKeysAlert component with specific title
-    await expect(page.getByText("No API Keys Configured")).toBeVisible();
+    await expect(page.getByText("Bring Your Own Key")).toBeVisible();
 
     // Should show the configure button that links to settings
     const configureButton = page.getByRole("link", { name: "Configure API Keys" });

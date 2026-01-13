@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ConsensusHeader } from "@/components/consensus/consensus-header";
 import { ConsensusInput } from "@/components/consensus/consensus-input";
 import { NoKeysAlert } from "@/components/consensus/no-keys-alert";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,17 +10,29 @@ import { DualView } from "@/components/consensus/dual-view";
 import { AutoScrollToggle } from "@/components/consensus/auto-scroll-toggle";
 import { useModels } from "@/hooks/use-models";
 import { useAutoScroll } from "@/hooks/use-auto-scroll";
+import { usePreviewStatus } from "@/hooks/use-preview-status";
+import { PreviewStatusBanner, PreviewExhaustedCard } from "@/components/preview";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { CustomErrorToast } from "@/components/ui/custom-error-toast";
 import posthog from "posthog-js";
 import { PRESETS, resolvePreset, type PresetId } from "@/lib/presets";
+import { PREVIEW_PRESET, resolvePreviewPreset } from "@/lib/preview-preset";
+import { getRecommendedEvaluatorModels } from "@/lib/openrouter-models";
 import type {
   ModelSelection,
   RoundData,
   ConsensusStreamEvent,
   ConsensusEvaluation,
 } from "@/lib/types";
+
+const EMPTY_KEYS = {
+  anthropic: false,
+  openai: false,
+  google: false,
+  tavily: false,
+  openrouter: false,
+} as const;
 
 export default function ConsensusPage() {
   const [prompt, setPrompt] = useState("");
@@ -36,6 +47,9 @@ export default function ConsensusPage() {
     isLoading: modelsLoading,
     refetch,
   } = useModels();
+
+  // Preview status (for users without API keys)
+  const { status: previewStatus, isLoading: previewLoading, decrementRun: decrementPreviewRun } = usePreviewStatus();
 
   // Check for API key updates and refetch if needed
   useEffect(() => {
@@ -144,6 +158,11 @@ export default function ConsensusPage() {
   const currentSearchDataRef = useRef<import("@/lib/types").SearchData | null>(null);
   const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const previewRefetchedRef = useRef<boolean>(false);
+
+  // Refs for preview mode PostHog tracking
+  const previewModeViewedRef = useRef<boolean>(false);
+  const prevPreviewRunsRef = useRef<number | null>(null);
 
   // Auto-scroll hook
   const { scrollToBottom, enabled: autoScrollEnabled, isUserScrolling, toggleEnabled, pauseAutoScroll, resumeAutoScroll } = useAutoScroll();
@@ -180,7 +199,8 @@ export default function ConsensusPage() {
       // Set settings from preset
       setMaxRounds(preset.maxRounds);
       setConsensusThreshold(preset.consensusThreshold);
-      setEnableSearch(preset.enableSearch || false);
+      // Only enable search if preset wants it AND user has Tavily key
+      setEnableSearch((preset.enableSearch || false) && !!hasKeys?.tavily);
 
       // Set selected models
       const modelSelections: ModelSelection[] = resolved.selectedModels.map((m, i) => ({
@@ -201,9 +221,6 @@ export default function ConsensusPage() {
       setSelectedPresetId(presetId);
       setPresetModelIds(modelSelections.map(m => m.modelId));
 
-      // Collapse settings panel after applying preset
-      setSettingsExpanded(false);
-
       // Track preset selection
       posthog.capture("preset_selected", {
         preset_id: presetId,
@@ -219,7 +236,7 @@ export default function ConsensusPage() {
         maxRounds: preset.maxRounds,
         consensusThreshold: preset.consensusThreshold,
         evaluatorModel: evaluatorId,
-        enableSearch: preset.enableSearch || false,
+        enableSearch: (preset.enableSearch || false) && !!hasKeys?.tavily,
       };
     } catch (error) {
       console.error("Failed to apply preset:", error);
@@ -228,9 +245,9 @@ export default function ConsensusPage() {
       });
       return null;
     }
-  }, [models, evaluatorModel]);
+  }, [models, evaluatorModel, hasKeys]);
 
-  // Initialize with balanced preset on first load (only if no saved preferences)
+  // Initialize with appropriate preset on first load (only if no saved preferences)
   useEffect(() => {
     if (models.length === 0 || selectedModels.length > 0) return;
 
@@ -248,9 +265,36 @@ export default function ConsensusPage() {
       // If localStorage fails, continue with preset
     }
 
-    // Apply balanced preset by default
-    applyPreset("balanced");
-  }, [models, selectedModels.length, applyPreset]);
+    // In preview mode, use preview preset values directly
+    // Otherwise use "balanced" preset
+    const inPreviewMode = !hasAnyKey && previewStatus?.enabled && (previewStatus?.runsRemaining ?? 0) > 0;
+
+    if (inPreviewMode) {
+      // Apply preview preset directly (uses PREVIEW_PRESET values like 95% threshold)
+      const resolved = resolvePreviewPreset(models);
+      setMaxRounds(PREVIEW_PRESET.maxRounds);
+      setConsensusThreshold(PREVIEW_PRESET.consensusThreshold);
+      setEnableSearch(false);
+
+      const modelSelections: ModelSelection[] = resolved.selectedModels.map((m, i) => ({
+        id: `model-${i + 1}`,
+        provider: m.provider,
+        modelId: m.id,
+        label: m.shortName,
+      }));
+      setSelectedModels(modelSelections);
+
+      if (resolved.evaluatorModel) {
+        setEvaluatorModel(resolved.evaluatorModel.id);
+      }
+
+      setSelectedPresetId("casual"); // Show as casual in UI
+      setPresetModelIds(modelSelections.map(m => m.modelId));
+      setSettingsExpanded(false);
+    } else {
+      applyPreset("balanced");
+    }
+  }, [models, selectedModels.length, applyPreset, hasAnyKey, previewStatus]);
 
   // Initialize default models when models are loaded (only if no saved preferences)
   useEffect(() => {
@@ -323,38 +367,61 @@ export default function ConsensusPage() {
         // If localStorage fails, continue with defaults
       }
 
-      // Filter evaluation-suitable models (exclude nano/mini/lite/flash)
-      const suitableModels = models.filter((m) => {
-        const lower = m.name.toLowerCase();
-        return (
-          !lower.includes("nano") &&
-          !lower.includes(" mini") &&
-          !lower.includes("-mini") &&
-          !lower.includes("lite") &&
-          !lower.includes("flash")
-        );
-      });
-
-      // 1. Try to find GPT-4o-mini (good balance of cost/quality for evaluation)
-      const gpt4oMini = suitableModels.find(
-        (m) => m.provider === "openai" && m.id.includes("gpt-4o-mini")
-      );
-
-      // 2. Fall back to Claude Sonnet
-      const claudeSonnet = suitableModels.find(
-        (m) => m.provider === "anthropic" && m.id.includes("sonnet")
-      );
-
-      // 3. Otherwise use first suitable model
-      if (gpt4oMini) {
-        setEvaluatorModel(gpt4oMini.id);
-      } else if (claudeSonnet) {
-        setEvaluatorModel(claudeSonnet.id);
-      } else if (suitableModels.length > 0) {
-        setEvaluatorModel(suitableModels[0].id);
+      // Use the recommendation logic to pick the best evaluator
+      // This considers evaluation suitability, provider diversity, and version scores
+      const recommended = getRecommendedEvaluatorModels(models, 1);
+      if (recommended.length > 0) {
+        setEvaluatorModel(recommended[0]);
+      } else if (models.length > 0) {
+        // Fallback: use first available model
+        setEvaluatorModel(models[0].id);
       }
     }
-  }, [models, evaluatorModel]);
+  }, [models, evaluatorModel, hasAnyKey, previewStatus]);
+
+  // Track preview mode events (view and limit reached)
+  useEffect(() => {
+    const isPreview = !hasAnyKey && previewStatus?.enabled;
+    const runsRemaining = previewStatus?.runsRemaining ?? 0;
+    const runsUsed = previewStatus?.runsUsed ?? 0;
+
+    // Track when user first views preview mode
+    if (isPreview && runsRemaining > 0 && !previewModeViewedRef.current) {
+      previewModeViewedRef.current = true;
+      posthog.capture("preview_mode_viewed", {
+        runs_remaining: runsRemaining,
+        runs_used: runsUsed,
+      });
+      // Mark this user as a preview user for conversion tracking
+      localStorage.setItem("previewUserSession", JSON.stringify({
+        firstViewedAt: new Date().toISOString(),
+        runsUsed: runsUsed,
+      }));
+    }
+
+    // Track when preview limit is reached (runs transition from >0 to 0)
+    if (isPreview && prevPreviewRunsRef.current !== null && prevPreviewRunsRef.current > 0 && runsRemaining === 0) {
+      posthog.capture("preview_limit_reached", {
+        total_runs_used: runsUsed,
+      });
+    }
+
+    // Update previous runs ref and localStorage runs count
+    if (isPreview) {
+      prevPreviewRunsRef.current = runsRemaining;
+      // Update runsUsed in localStorage for conversion tracking
+      try {
+        const existing = localStorage.getItem("previewUserSession");
+        if (existing) {
+          const session = JSON.parse(existing);
+          session.runsUsed = runsUsed;
+          localStorage.setItem("previewUserSession", JSON.stringify(session));
+        }
+      } catch {
+        // Ignore localStorage errors
+      }
+    }
+  }, [hasAnyKey, previewStatus]);
 
   // Restore selectedPresetId and presetModelIds from localStorage on mount
   useEffect(() => {
@@ -430,14 +497,8 @@ export default function ConsensusPage() {
       return;
     }
 
-    // Log models being used
-    console.log('=== Starting Consensus Evaluation ===');
-    console.log('Selected models:', modelsToUse.map(m => `${m.provider}:${m.modelId} (${m.label})`));
-    console.log('Evaluator model:', evaluatorToUse);
-    console.log('Max rounds:', maxRoundsToUse);
-    console.log('Consensus threshold:', thresholdToUse + '%');
-
     // Track consensus started (conversion event)
+    const isPreviewRun = !hasAnyKey && previewStatus?.enabled && (previewStatus?.runsRemaining ?? 0) > 0;
     posthog.capture("consensus_started", {
       model_count: modelsToUse.length,
       models: modelsToUse.map(m => m.modelId),
@@ -446,6 +507,8 @@ export default function ConsensusPage() {
       consensus_threshold: thresholdToUse,
       search_enabled: searchToUse,
       prompt_length: promptValue.length,
+      is_preview_mode: isPreviewRun,
+      preview_runs_remaining: isPreviewRun ? previewStatus?.runsRemaining : undefined,
     });
 
     setIsProcessing(true);
@@ -605,6 +668,7 @@ export default function ConsensusPage() {
       case "start":
         setConversationId(event.conversationId);
         setOverallStatus("Starting consensus generation...");
+        previewRefetchedRef.current = false; // Reset for new run
         break;
 
       case "round-status":
@@ -711,6 +775,8 @@ export default function ConsensusPage() {
               keyDifferences: currentEvaluationRef.current.keyDifferences || [],
               reasoning: currentEvaluationRef.current.reasoning || "",
               isGoodEnough: currentEvaluationRef.current.isGoodEnough || false,
+              needsMoreInfo: currentEvaluationRef.current.needsMoreInfo || false,
+              suggestedSearchQuery: currentEvaluationRef.current.suggestedSearchQuery || "",
             },
             refinementPrompts: event.data,
             searchData: currentSearchDataRef.current || undefined,
@@ -734,6 +800,8 @@ export default function ConsensusPage() {
               keyDifferences: currentEvaluationRef.current.keyDifferences || [],
               reasoning: currentEvaluationRef.current.reasoning || "",
               isGoodEnough: currentEvaluationRef.current.isGoodEnough || false,
+              needsMoreInfo: currentEvaluationRef.current.needsMoreInfo || false,
+              suggestedSearchQuery: currentEvaluationRef.current.suggestedSearchQuery || "",
             },
             searchData: currentSearchDataRef.current || undefined,
           };
@@ -747,6 +815,11 @@ export default function ConsensusPage() {
         break;
 
       case "synthesis-chunk":
+        // Decrement preview run count on first chunk (instant UI update)
+        if (!previewRefetchedRef.current) {
+          previewRefetchedRef.current = true;
+          decrementPreviewRun();
+        }
         setFinalConsensus((prev) => (prev || "") + event.content);
         setOverallStatus("Generating final consensus...");
         // Trigger auto-scroll for streaming consensus
@@ -844,6 +917,7 @@ export default function ConsensusPage() {
 
         // Track consensus completed
         const finalScore = currentEvaluationRef.current?.score ?? 0;
+        const isPreviewRun = !hasAnyKey && previewStatus?.enabled;
         posthog.capture("consensus_completed", {
           total_rounds: currentRoundRef.current,
           max_rounds: maxRounds,
@@ -854,6 +928,7 @@ export default function ConsensusPage() {
           consensus_threshold: consensusThreshold,
           reached_consensus: finalScore >= consensusThreshold,
           search_enabled: enableSearch,
+          is_preview_mode: isPreviewRun,
         });
         break;
 
@@ -881,12 +956,23 @@ export default function ConsensusPage() {
     }
   }
 
-  // With OpenRouter, user has access to all model types
-  const keyCount = hasKeys
-    ? (hasKeys.openrouter ? 3 : [hasKeys.anthropic, hasKeys.openai, hasKeys.google].filter(Boolean).length)
-    : 0;
+  // Determine if user is in preview mode (no keys but preview available)
+  const isPreviewMode = !hasAnyKey && previewStatus?.enabled && (previewStatus?.runsRemaining ?? 0) > 0;
 
-  if (modelsLoading) {
+  // Preview exhausted: had preview access but used all runs
+  const isPreviewExhausted = !hasAnyKey && !!previewStatus?.enabled && (previewStatus?.runsRemaining ?? 0) === 0;
+
+  // Keep showing UI if we have results or are processing (even if preview just hit 0)
+  const hasActiveSession = isProcessing || finalConsensus !== null;
+
+  // Build preview constraints for PresetSelector when in preview mode
+  const previewConstraints = isPreviewMode && previewStatus?.constraints ? {
+    maxRounds: previewStatus.constraints.maxRounds,
+    maxParticipants: previewStatus.constraints.maxParticipants,
+    allowsSearch: false, // Preview doesn't support search
+  } : null;
+
+  if (modelsLoading || previewLoading) {
     return (
       <div className="container py-4 md:py-8 px-2 md:px-4">
         <div className="flex min-h-[400px] items-center justify-center">
@@ -896,13 +982,17 @@ export default function ConsensusPage() {
     );
   }
 
-  if (!hasAnyKey) {
+  // No keys and no preview available - show upgrade prompt
+  // But keep showing UI if we have an active session (processing or results)
+  if (!hasAnyKey && !isPreviewMode && !hasActiveSession) {
     return (
       <div className="container py-4 md:py-12 px-2 md:px-4">
-        <div className="space-y-6">
-          <ConsensusHeader keyCount={keyCount} />
+        {/* Both cards are self-contained, no header needed */}
+        {isPreviewExhausted ? (
+          <PreviewExhaustedCard />
+        ) : (
           <NoKeysAlert />
-        </div>
+        )}
       </div>
     );
   }
@@ -933,6 +1023,13 @@ export default function ConsensusPage() {
 
       <div className="space-y-3">
 
+        {/* Preview Status Banner - show during preview mode OR when exhausted with active session */}
+        {(isPreviewMode || (isPreviewExhausted && hasActiveSession)) && (
+          <div className="mx-auto w-full max-w-4xl">
+            <PreviewStatusBanner status={previewStatus} isLoading={previewLoading} />
+          </div>
+        )}
+
         {/* Input */}
         <div className="mx-auto w-full max-w-4xl">
           <ConsensusInput
@@ -943,7 +1040,9 @@ export default function ConsensusPage() {
             onSubmitWithPrompt={submitConsensus}
             onPresetSelect={applyPreset}
             onSubmitWithPreset={handleSubmitWithPreset}
-            showSuggestions={!finalConsensus}
+            showSuggestions={!finalConsensus && !isPreviewExhausted}
+            isPreviewMode={isPreviewMode}
+            isPreviewExhausted={isPreviewExhausted}
           />
         </div>
 
@@ -951,7 +1050,7 @@ export default function ConsensusPage() {
         {models.length > 0 && (
           <div className="mx-auto w-full max-w-4xl">
             <SettingsPanel
-              availableKeys={hasKeys!}
+              availableKeys={hasKeys ?? EMPTY_KEYS}
               selectedModels={selectedModels}
               setSelectedModels={setSelectedModels}
               maxRounds={maxRounds}
@@ -962,7 +1061,7 @@ export default function ConsensusPage() {
               setEvaluatorModel={setEvaluatorModel}
               enableSearch={enableSearch}
               setEnableSearch={setEnableSearch}
-              disabled={isProcessing || isSynthesizing || isGeneratingProgression}
+              disabled={isProcessing || isSynthesizing || isGeneratingProgression || isPreviewExhausted}
               isProcessing={isProcessing || isSynthesizing || isGeneratingProgression}
               isExpanded={settingsExpanded}
               setIsExpanded={setSettingsExpanded}
@@ -972,6 +1071,7 @@ export default function ConsensusPage() {
               activePreset={activePreset}
               presetModelIds={presetModelIds}
               onPresetSelect={applyPreset}
+              previewConstraints={previewConstraints}
             />
           </div>
         )}

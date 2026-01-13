@@ -21,6 +21,14 @@ import { sendEvent, type ConsensusEvent } from "@/lib/consensus-events";
 import { logger } from "@/lib/logger";
 import { captureServerException, getPostHogClient } from "@/lib/posthog-server";
 import { z } from "zod";
+import { getPreviewUserIdentifier } from "@/lib/request-utils";
+import { getPreviewStatus, incrementPreviewUsage } from "@/lib/preview-db";
+import {
+  getPreviewApiKey,
+  validatePreviewParams,
+  PREVIEW_CONFIG,
+} from "@/lib/config/preview";
+import { isPreviewEnabledForUser } from "@/lib/posthog-server";
 
 export const maxDuration = 600; // 10 minutes for multiple rounds
 export const runtime = "nodejs";
@@ -49,13 +57,10 @@ type ConsensusRequest = z.infer<typeof ConsensusRequestSchema>;
 
 /**
  * POST /api/consensus - Multi-round consensus workflow
+ * Supports both authenticated (BYOK) and preview modes
  */
 export async function POST(request: NextRequest) {
   const session = await auth();
-
-  if (!session?.user?.id) {
-    return new Response("Unauthorized", { status: 401 });
-  }
 
   try {
     // Validate request body with Zod schema
@@ -82,10 +87,90 @@ export async function POST(request: NextRequest) {
       enableSearch,
     } = parseResult.data;
 
-    // Get user's API keys
-    const keys = await getApiKeys(session.user.id);
+    // Determine if this is a preview run or authenticated BYOK run
+    // Preview mode: no session OR session with no API keys configured
+    let isPreviewMode = false;
+    let keys: Record<string, string | null> = {
+      anthropic: null,
+      openai: null,
+      google: null,
+      tavily: null,
+      openrouter: null,
+    };
+    let previewUserIdentifier: string | null = null;
 
-    // Validate Tavily key if search enabled
+    if (session?.user?.id) {
+      // Authenticated user - check if they have API keys
+      keys = await getApiKeys(session.user.id);
+      const hasAnyKey = keys.anthropic || keys.openai || keys.google || keys.openrouter;
+      isPreviewMode = !hasAnyKey;
+    } else {
+      // No session - preview mode only
+      isPreviewMode = true;
+    }
+
+    // Handle preview mode
+    if (isPreviewMode) {
+      // Get user identifier for preview tracking
+      previewUserIdentifier = getPreviewUserIdentifier(request);
+
+      // Check if preview system is enabled (includes feature flag check)
+      const previewEnabled = await isPreviewEnabledForUser(previewUserIdentifier);
+      if (!previewEnabled) {
+        return new Response(
+          JSON.stringify({
+            error: "Preview mode is not available. Please sign in and add your API keys.",
+          }),
+          { status: 403, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // Check preview usage
+      const previewStatus = await getPreviewStatus(previewUserIdentifier);
+      if (previewStatus.runsRemaining <= 0) {
+        return new Response(
+          JSON.stringify({
+            error: "Preview limit reached. Add your API key for unlimited access.",
+            previewExhausted: true,
+          }),
+          { status: 429, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate params against preview constraints
+      const validation = validatePreviewParams({
+        models: models.map((m) => m.modelId),
+        rounds: maxRounds,
+        participants: models.length,
+      });
+
+      if (!validation.valid) {
+        return new Response(
+          JSON.stringify({
+            error: `Preview constraints: ${validation.errors.join("; ")}`,
+            previewConstraintViolation: true,
+          }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // Web search not available in preview mode
+      if (enableSearch) {
+        return new Response(
+          JSON.stringify({
+            error: "Web search is not available in preview mode. Add your API keys to enable search.",
+          }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // Set up preview API key for OpenRouter
+      keys.openrouter = getPreviewApiKey();
+
+      console.log(`[Consensus] Preview mode: user=${previewUserIdentifier.substring(0, 8)}..., runsRemaining=${previewStatus.runsRemaining}`);
+    }
+
+    // Validate Tavily key if search enabled (only for BYOK mode)
     const tavilyKey = enableSearch ? keys.tavily : null;
     if (enableSearch && !tavilyKey) {
       return new Response(
@@ -104,7 +189,7 @@ export async function POST(request: NextRequest) {
     const useTargetedRefinement = true; // Temporarily hardcoded for testing
 
     // Log request summary
-    console.log(`[Consensus] Starting: ${models.length} models, evaluator=${evaluatorModel}, maxRounds=${maxRounds}, threshold=${consensusThreshold}%, search=${enableSearch}, targetedRefinement=${useTargetedRefinement}`);
+    console.log(`[Consensus] Starting: ${models.length} models, evaluator=${evaluatorModel}, maxRounds=${maxRounds}, threshold=${consensusThreshold}%, search=${enableSearch}, targetedRefinement=${useTargetedRefinement}, mode=${isPreviewMode ? "preview" : "byok"}`);
 
     // Create provider instances based on available keys
     // Direct provider keys take precedence over OpenRouter
@@ -201,13 +286,16 @@ export async function POST(request: NextRequest) {
     // Use the routed model ID (direct format for direct providers, OpenRouter format for OpenRouter)
     const evaluatorModelId = evaluatorProviderInfo.modelId;
 
-    // Create database record
-    const conversationId = await createConsensusConversation(
-      session.user.id,
-      prompt,
-      maxRounds,
-      consensusThreshold
-    );
+    // Create database record (skip for preview mode - no user ID)
+    let conversationId: number | null = null;
+    if (!isPreviewMode && session?.user?.id) {
+      conversationId = await createConsensusConversation(
+        session.user.id,
+        prompt,
+        maxRounds,
+        consensusThreshold
+      );
+    }
 
     // Create streaming response
     const encoder = new TextEncoder();
@@ -453,26 +541,28 @@ export async function POST(request: NextRequest) {
               searchData: searchData || undefined,
             });
 
-            // Save round to database
-            await saveConsensusRound(conversationId, {
-              roundNumber: currentRound,
-              modelResponses: Object.fromEntries(roundResponses),
-              evaluation: {
-                reasoning: evaluation.reasoning,
-                keyDifferences: evaluation.keyDifferences,
-                score: evaluation.score,
-              },
-              refinementPrompts:
-                !isGoodEnough && currentRound < maxRounds
-                  ? buildRefinementPromptsForAllModels(
-                      prompt,
-                      roundResponses,
-                      models,
-                      currentRound + 1,
-                      useTargetedRefinement ? evaluation : undefined
-                    )
-                  : undefined,
-            });
+            // Save round to database (skip for preview mode)
+            if (conversationId !== null) {
+              await saveConsensusRound(conversationId, {
+                roundNumber: currentRound,
+                modelResponses: Object.fromEntries(roundResponses),
+                evaluation: {
+                  reasoning: evaluation.reasoning,
+                  keyDifferences: evaluation.keyDifferences,
+                  score: evaluation.score,
+                },
+                refinementPrompts:
+                  !isGoodEnough && currentRound < maxRounds
+                    ? buildRefinementPromptsForAllModels(
+                        prompt,
+                        roundResponses,
+                        models,
+                        currentRound + 1,
+                        useTargetedRefinement ? evaluation : undefined
+                      )
+                    : undefined,
+              });
+            }
 
             // Stream refinement prompts if not done
             if (!isGoodEnough && currentRound < maxRounds) {
@@ -503,6 +593,7 @@ export async function POST(request: NextRequest) {
           console.log(`[Synthesis] Generating final consensus with ${evaluatorProvider}:${evaluatorModelId}`);
 
           let finalSynthesis = "";
+          let previewUsageIncremented = false;
           await streamFinalSynthesis({
             originalPrompt: prompt,
             finalResponses: previousResponses,
@@ -512,6 +603,14 @@ export async function POST(request: NextRequest) {
             evaluatorProvider,
             evaluatorModel: evaluatorModelId,
             onChunk: (chunk) => {
+              // Increment preview usage on first synthesis chunk (proves we got a real response)
+              // Fire-and-forget to avoid blocking the stream
+              if (!previewUsageIncremented && isPreviewMode && previewUserIdentifier) {
+                previewUsageIncremented = true;
+                incrementPreviewUsage(previewUserIdentifier)
+                  .then(() => console.log(`[Consensus] Preview run counted for user=${previewUserIdentifier.substring(0, 8)}...`))
+                  .catch((err) => console.error(`[Consensus] Failed to increment preview usage:`, err));
+              }
               finalSynthesis += chunk;
               safeEnqueue({
                 type: "synthesis-chunk",
@@ -551,13 +650,15 @@ export async function POST(request: NextRequest) {
           // Check if aborted before final updates
           if (request.signal.aborted) return;
 
-          // Update database with final result
-          await updateConversationResult(
-            conversationId,
-            finalSynthesis,
-            finalScore,
-            currentRound
-          );
+          // Update database with final result (skip for preview mode)
+          if (conversationId !== null) {
+            await updateConversationResult(
+              conversationId,
+              finalSynthesis,
+              finalScore,
+              currentRound
+            );
+          }
 
           // Send final responses
           if (!safeEnqueue({
@@ -575,7 +676,7 @@ export async function POST(request: NextRequest) {
           // Capture to PostHog server-side with model context
           captureServerException(
             error instanceof Error ? error : new Error(error.message || "Unknown error"),
-            session.user.id,
+            session?.user?.id || (isPreviewMode ? `preview:${previewUserIdentifier?.substring(0, 8)}` : "anonymous"),
             {
               error_type: "consensus_workflow_error",
               current_round: currentRound,
@@ -584,6 +685,7 @@ export async function POST(request: NextRequest) {
               evaluator_model: evaluatorModel,
               selected_models: models.map(m => ({ id: m.id, modelId: m.modelId, provider: m.provider })),
               search_enabled: enableSearch,
+              is_preview_mode: isPreviewMode,
             }
           );
 
@@ -682,7 +784,7 @@ async function generateRoundResponses(opts: {
     if (!provider) {
       const errorMessage = `Provider not configured for ${modelSelection.label}. Model: ${modelSelection.modelId}, Provider: ${modelProvider}`;
       const error = new Error(errorMessage);
-      console.error(`Provider not found for ${modelSelection.id}:`, errorMessage);
+      console.error("Provider not found for model:", modelSelection.id, errorMessage);
 
       // Capture to PostHog server-side
       captureServerException(error, "anonymous", {

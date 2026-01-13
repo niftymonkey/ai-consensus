@@ -1,25 +1,25 @@
 "use client";
 
-import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Key, ArrowRight } from "lucide-react";
+import { Sparkles, Key, ArrowRight } from "lucide-react";
+import Link from "next/link";
 import posthog from "posthog-js";
 
-export function NoKeysAlert() {
+export function PreviewExhaustedCard() {
   const handleCtaClick = () => {
-    posthog.capture("preview_upgrade_cta_clicked", { source: "no_keys_alert" });
+    posthog.capture("preview_upgrade_cta_clicked", { source: "exhausted_card" });
   };
 
   return (
     <Card className="mx-auto max-w-xl">
       <CardHeader className="text-center pb-2">
         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent">
-          <Key className="h-6 w-6 text-accent-foreground" />
+          <Sparkles className="h-6 w-6 text-accent-foreground" />
         </div>
-        <CardTitle className="text-xl">Bring Your Own Key</CardTitle>
+        <CardTitle className="text-xl">Ready for More?</CardTitle>
         <CardDescription className="text-base">
-          Add your API key to start using AI Consensus with multiple models working together.
+          You&apos;ve used all 3 preview runs. Add your own API key to continue using AI Consensus with unlimited access.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -42,7 +42,7 @@ export function NoKeysAlert() {
           </Link>
         </Button>
         <p className="text-xs text-center text-muted-foreground">
-          We recommend OpenRouter - one key for 200+ models.
+          Your keys are encrypted and stored locally in your browser.
         </p>
       </CardContent>
     </Card>

@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { PreviewUpgradeCard } from "@/components/preview";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -123,7 +124,17 @@ export default function SettingsPage() {
   return (
     <div className="container py-12">
       <div className="mx-auto max-w-4xl space-y-3">
+        <Link
+          href="/consensus"
+          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          ← Back to Consensus
+        </Link>
         <SettingsHeader />
+
+        {/* Preview Upgrade Messaging (only shown to preview users without keys) */}
+        {!loading && <PreviewUpgradeCard hasKeys={hasOpenRouter || hasDirectKeys} />}
+
 
         {/* Model Provider Keys */}
         <Card>

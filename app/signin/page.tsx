@@ -26,8 +26,8 @@ function isValidCallbackUrl(url: string): boolean {
 
 export default function SignInPage() {
   const searchParams = useSearchParams();
-  const rawCallbackUrl = searchParams.get("callbackUrl") || "/";
-  const callbackUrl = isValidCallbackUrl(rawCallbackUrl) ? rawCallbackUrl : "/";
+  const rawCallbackUrl = searchParams.get("callbackUrl") || "/consensus";
+  const callbackUrl = isValidCallbackUrl(rawCallbackUrl) ? rawCallbackUrl : "/consensus";
 
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
