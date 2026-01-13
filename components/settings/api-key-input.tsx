@@ -55,6 +55,30 @@ export function APIKeyInput({
         posthog.capture("api_key_saved", {
           provider,
         });
+
+        // Check if this is a preview user converting (first key saved)
+        if (!maskedKey) {
+          try {
+            const previewSession = localStorage.getItem("previewUserSession");
+            if (previewSession) {
+              const session = JSON.parse(previewSession);
+              const firstViewedAt = new Date(session.firstViewedAt);
+              const minutesSinceFirstPreview = Math.floor(
+                (Date.now() - firstViewedAt.getTime()) / (1000 * 60)
+              );
+              posthog.capture("preview_converted", {
+                provider,
+                minutes_since_first_preview: minutesSinceFirstPreview,
+                total_preview_runs: session.runsUsed ?? 0,
+              });
+              // Clear the flag after conversion
+              localStorage.removeItem("previewUserSession");
+            }
+          } catch {
+            // Ignore localStorage errors
+          }
+        }
+
         // Reset saved status after 2 seconds
         setTimeout(() => setSaveStatus("idle"), 2000);
       } else {

@@ -1,9 +1,16 @@
+"use client";
+
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Key, ArrowRight } from "lucide-react";
+import posthog from "posthog-js";
 
 export function NoKeysAlert() {
+  const handleCtaClick = () => {
+    posthog.capture("preview_upgrade_cta_clicked", { source: "no_keys_alert" });
+  };
+
   return (
     <Card className="mx-auto max-w-xl">
       <CardHeader className="text-center pb-2">
@@ -28,7 +35,7 @@ export function NoKeysAlert() {
             <li>Web search integration</li>
           </ul>
         </div>
-        <Button asChild className="w-full" size="lg">
+        <Button asChild className="w-full" size="lg" onClick={handleCtaClick}>
           <Link href="/settings">
             Configure API Keys
             <ArrowRight className="ml-2 h-4 w-4" />

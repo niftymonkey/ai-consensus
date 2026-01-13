@@ -4,8 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Sparkles, Key, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import posthog from "posthog-js";
 
 export function PreviewExhaustedCard() {
+  const handleCtaClick = () => {
+    posthog.capture("preview_upgrade_cta_clicked", { source: "exhausted_card" });
+  };
+
   return (
     <Card className="mx-auto max-w-xl">
       <CardHeader className="text-center pb-2">
@@ -30,7 +35,7 @@ export function PreviewExhaustedCard() {
             <li>Web search integration</li>
           </ul>
         </div>
-        <Button asChild className="w-full" size="lg">
+        <Button asChild className="w-full" size="lg" onClick={handleCtaClick}>
           <Link href="/settings">
             Configure API Keys
             <ArrowRight className="ml-2 h-4 w-4" />

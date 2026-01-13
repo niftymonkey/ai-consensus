@@ -160,6 +160,10 @@ export default function ConsensusPage() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const previewRefetchedRef = useRef<boolean>(false);
 
+  // Refs for preview mode PostHog tracking
+  const previewModeViewedRef = useRef<boolean>(false);
+  const prevPreviewRunsRef = useRef<number | null>(null);
+
   // Auto-scroll hook
   const { scrollToBottom, enabled: autoScrollEnabled, isUserScrolling, toggleEnabled, pauseAutoScroll, resumeAutoScroll } = useAutoScroll();
 
@@ -375,6 +379,50 @@ export default function ConsensusPage() {
     }
   }, [models, evaluatorModel, hasAnyKey, previewStatus]);
 
+  // Track preview mode events (view and limit reached)
+  useEffect(() => {
+    const isPreview = !hasAnyKey && previewStatus?.enabled;
+    const runsRemaining = previewStatus?.runsRemaining ?? 0;
+    const runsUsed = previewStatus?.runsUsed ?? 0;
+
+    // Track when user first views preview mode
+    if (isPreview && runsRemaining > 0 && !previewModeViewedRef.current) {
+      previewModeViewedRef.current = true;
+      posthog.capture("preview_mode_viewed", {
+        runs_remaining: runsRemaining,
+        runs_used: runsUsed,
+      });
+      // Mark this user as a preview user for conversion tracking
+      localStorage.setItem("previewUserSession", JSON.stringify({
+        firstViewedAt: new Date().toISOString(),
+        runsUsed: runsUsed,
+      }));
+    }
+
+    // Track when preview limit is reached (runs transition from >0 to 0)
+    if (isPreview && prevPreviewRunsRef.current !== null && prevPreviewRunsRef.current > 0 && runsRemaining === 0) {
+      posthog.capture("preview_limit_reached", {
+        total_runs_used: runsUsed,
+      });
+    }
+
+    // Update previous runs ref and localStorage runs count
+    if (isPreview) {
+      prevPreviewRunsRef.current = runsRemaining;
+      // Update runsUsed in localStorage for conversion tracking
+      try {
+        const existing = localStorage.getItem("previewUserSession");
+        if (existing) {
+          const session = JSON.parse(existing);
+          session.runsUsed = runsUsed;
+          localStorage.setItem("previewUserSession", JSON.stringify(session));
+        }
+      } catch {
+        // Ignore localStorage errors
+      }
+    }
+  }, [hasAnyKey, previewStatus]);
+
   // Restore selectedPresetId and presetModelIds from localStorage on mount
   useEffect(() => {
     try {
@@ -450,6 +498,7 @@ export default function ConsensusPage() {
     }
 
     // Track consensus started (conversion event)
+    const isPreviewRun = !hasAnyKey && previewStatus?.enabled && (previewStatus?.runsRemaining ?? 0) > 0;
     posthog.capture("consensus_started", {
       model_count: modelsToUse.length,
       models: modelsToUse.map(m => m.modelId),
@@ -458,6 +507,8 @@ export default function ConsensusPage() {
       consensus_threshold: thresholdToUse,
       search_enabled: searchToUse,
       prompt_length: promptValue.length,
+      is_preview_mode: isPreviewRun,
+      preview_runs_remaining: isPreviewRun ? previewStatus?.runsRemaining : undefined,
     });
 
     setIsProcessing(true);
@@ -866,6 +917,7 @@ export default function ConsensusPage() {
 
         // Track consensus completed
         const finalScore = currentEvaluationRef.current?.score ?? 0;
+        const isPreviewRun = !hasAnyKey && previewStatus?.enabled;
         posthog.capture("consensus_completed", {
           total_rounds: currentRoundRef.current,
           max_rounds: maxRounds,
@@ -876,6 +928,7 @@ export default function ConsensusPage() {
           consensus_threshold: consensusThreshold,
           reached_consensus: finalScore >= consensusThreshold,
           search_enabled: enableSearch,
+          is_preview_mode: isPreviewRun,
         });
         break;
 

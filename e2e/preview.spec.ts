@@ -383,6 +383,6 @@ test.describe("Preview Mode Disabled", () => {
     await page.goto("/consensus");
 
     // Should show NoKeysAlert, not preview banner
-    await expect(page.getByText("No API Keys Configured")).toBeVisible();
+    await expect(page.getByText("Bring Your Own Key")).toBeVisible();
   });
 });

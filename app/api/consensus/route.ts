@@ -784,7 +784,7 @@ async function generateRoundResponses(opts: {
     if (!provider) {
       const errorMessage = `Provider not configured for ${modelSelection.label}. Model: ${modelSelection.modelId}, Provider: ${modelProvider}`;
       const error = new Error(errorMessage);
-      console.error(`Provider not found for ${modelSelection.id}:`, errorMessage);
+      console.error("Provider not found for model:", modelSelection.id, errorMessage);
 
       // Capture to PostHog server-side
       captureServerException(error, "anonymous", {

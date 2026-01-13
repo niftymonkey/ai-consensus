@@ -149,8 +149,15 @@ export function SettingsPanel({
           }
         }
 
-        setMaxRounds(prefs.maxRounds);
-        setConsensusThreshold(prefs.threshold);
+        // In preview mode, clamp values to preview constraints
+        if (previewConstraints) {
+          setMaxRounds(Math.min(prefs.maxRounds, previewConstraints.maxRounds));
+          // Use preview threshold (95%) to encourage multi-round discussions
+          setConsensusThreshold(95);
+        } else {
+          setMaxRounds(prefs.maxRounds);
+          setConsensusThreshold(prefs.threshold);
+        }
 
         // Restore evaluator if valid in the FILTERED evaluator list
         // (non-preview mode filters out mini/haiku/flash models)
@@ -182,6 +189,21 @@ export function SettingsPanel({
       setHasLoadedPreferences(true);
     }
   }, [hasLoadedPreferences, setIsExpanded, openRouterLoading, openRouterModels, availableKeys.tavily, setSelectedModels, setMaxRounds, setConsensusThreshold, setEvaluatorModel, setEnableSearch, previewConstraints]);
+
+  // Enforce preview constraints whenever they become available
+  // This handles the case where preferences were restored before preview status was known
+  useEffect(() => {
+    if (previewConstraints && hasLoadedPreferences) {
+      // Clamp maxRounds to preview limit
+      if (maxRounds > previewConstraints.maxRounds) {
+        setMaxRounds(previewConstraints.maxRounds);
+      }
+      // Enforce preview threshold (95%)
+      if (consensusThreshold !== 95) {
+        setConsensusThreshold(95);
+      }
+    }
+  }, [previewConstraints, hasLoadedPreferences, maxRounds, consensusThreshold, setMaxRounds, setConsensusThreshold]);
 
   // Save preferences
   const savePreferences = useCallback(() => {
