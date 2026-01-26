@@ -4,9 +4,10 @@ import type { AIErrorType } from './consensus-events';
 /**
  * Create an OpenRouter provider instance
  */
-export function createOpenRouterProvider(apiKey: string) {
+export function createOpenRouterProvider(apiKey: string, customFetch?: typeof fetch) {
   return createOpenRouter({
     apiKey,
+    fetch: customFetch,
   });
 }
 

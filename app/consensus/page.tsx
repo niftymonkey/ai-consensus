@@ -534,7 +534,7 @@ export default function ConsensusPage() {
     // Create abort controller for this request
     abortControllerRef.current = new AbortController();
 
-    // Set client-side timeout safeguard (10 minutes - matches API maxDuration)
+    // Set client-side timeout safeguard (14 minutes - slightly longer than API maxDuration of 800s)
     // This is the last-resort failsafe; individual operations have their own timeouts
     timeoutIdRef.current = setTimeout(() => {
       // Only abort if there's still an active request
@@ -545,7 +545,7 @@ export default function ConsensusPage() {
         });
         handleCancel();
       }
-    }, 600000);
+    }, 840000);
 
     try {
       const response = await fetch("/api/consensus", {

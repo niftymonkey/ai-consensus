@@ -30,17 +30,19 @@ import {
  * @param provider - The provider name (used as fallback if not extractable from model)
  * @param model - The model ID (can be in OpenRouter format like "anthropic/claude-3.7-sonnet"
  *                or direct format like "claude-3-7-sonnet-20250219")
+ * @param customFetch - Optional custom fetch function (for Vercel Workflow DevKit)
  * @returns A model instance compatible with the Vercel AI SDK
  */
 export function getModelInstance(
   apiKey: string,
   provider: string,
-  model: string
+  model: string,
+  customFetch?: typeof fetch
 ) {
   // OpenRouter keys start with "sk-or-" - always route through OpenRouter
   const isOpenRouterKey = apiKey.startsWith("sk-or-");
   if (isOpenRouterKey) {
-    const openrouterProvider = createOpenRouterProvider(apiKey);
+    const openrouterProvider = createOpenRouterProvider(apiKey, customFetch);
     // Ensure OpenRouter format (provider/model)
     const openRouterModelId = model.includes("/")
       ? model
@@ -57,15 +59,15 @@ export function getModelInstance(
     const directModelId = extractDirectModelId(model);
     const providerInstance =
       extractedProvider === "anthropic"
-        ? createAnthropic({ apiKey })
+        ? createAnthropic({ apiKey, fetch: customFetch })
         : extractedProvider === "google"
-          ? createGoogleGenerativeAI({ apiKey })
-          : createOpenAI({ apiKey });
+          ? createGoogleGenerativeAI({ apiKey, fetch: customFetch })
+          : createOpenAI({ apiKey, fetch: customFetch });
 
     return providerInstance(directModelId);
   }
 
   // Non-direct provider - use OpenRouter
-  const openrouterProvider = createOpenRouterProvider(apiKey);
+  const openrouterProvider = createOpenRouterProvider(apiKey, customFetch);
   return openrouterProvider.chat(model);
 }
