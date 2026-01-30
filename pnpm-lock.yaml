@@ -7054,7 +7054,7 @@ snapshots:
 
   '@vercel/queue@0.0.0-alpha.33':
     dependencies:
-      '@vercel/oidc': 3.0.5
+      '@vercel/oidc': 3.1.0
       mixpart: 0.0.5-alpha.1
 
   '@vitest/expect@4.0.16':

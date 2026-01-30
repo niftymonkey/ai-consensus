@@ -235,6 +235,8 @@ async function executeRoundStep(
           model: getModelInstance(input.evaluatorKey, input.evaluatorProvider, input.evaluatorModel, workflowFetch),
           system: `You are a search necessity evaluator. Determine if a question requires current, up-to-date web information to answer well. Return ONLY "yes" or "no".`,
           prompt: input.prompt,
+          maxOutputTokens: 8192,
+          providerOptions: { openrouter: { max_tokens: 8192 } },
         });
         shouldSearch = result.text.trim().toLowerCase() === "yes";
 
@@ -243,6 +245,8 @@ async function executeRoundStep(
             model: getModelInstance(input.evaluatorKey, input.evaluatorProvider, input.evaluatorModel, workflowFetch),
             system: `Generate a focused web search query (3-8 words) for this question. Return ONLY the search query.`,
             prompt: input.prompt,
+            maxOutputTokens: 8192,
+            providerOptions: { openrouter: { max_tokens: 8192 } },
           });
           searchQuery = queryResult.text.trim();
         }
@@ -328,7 +332,16 @@ async function executeRoundStep(
           ? providerInfo.instance.chat(providerInfo.modelId)
           : providerInfo.instance(providerInfo.modelId);
 
-        const result = await streamText({ model: modelInstance, prompt: promptText });
+        const result = await streamText({
+          model: modelInstance,
+          prompt: promptText,
+          maxOutputTokens: 8192,
+          providerOptions: {
+            openrouter: {
+              max_tokens: 8192,
+            },
+          },
+        });
 
         let fullResponse = "";
         for await (const chunk of result.textStream) {
@@ -392,6 +405,12 @@ async function executeRoundStep(
       schema: consensusEvaluationJsonSchema,
       system: buildEvaluationSystemPrompt(input.consensusThreshold, input.enableSearch),
       prompt: buildEvaluationPrompt(responsesMap, input.models, round),
+      maxOutputTokens: 8192,
+      providerOptions: {
+        openrouter: {
+          max_tokens: 8192,
+        },
+      },
     });
 
     let evaluation: ConsensusEvaluation;
@@ -501,7 +520,12 @@ Create a single, unified response that:
 
 Generate the consensus response:`;
 
-  const result = await streamText({ model, prompt: synthesisPrompt });
+  const result = await streamText({
+    model,
+    prompt: synthesisPrompt,
+    maxOutputTokens: 8192,
+    providerOptions: { openrouter: { max_tokens: 8192 } },
+  });
 
   let synthesis = "";
   for await (const chunk of result.textStream) {
@@ -568,7 +592,12 @@ ${roundsSummary}
 
 Create a 2-4 paragraph narrative summary. Use markdown formatting. No emojis.`;
 
-    const result = await streamText({ model, prompt: progressionPrompt });
+    const result = await streamText({
+      model,
+      prompt: progressionPrompt,
+      maxOutputTokens: 8192,
+      providerOptions: { openrouter: { max_tokens: 8192 } },
+    });
 
     let summary = "";
     for await (const chunk of result.textStream) {
