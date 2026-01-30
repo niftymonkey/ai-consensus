@@ -42,6 +42,27 @@ export function captureServerException(
 }
 
 /**
+ * Capture a custom event to PostHog from server-side code.
+ * Use this for tracking workflow timing, performance metrics, etc.
+ *
+ * @param event - The event name (e.g., "consensus_timing")
+ * @param distinctId - User ID (use "anonymous" if not available)
+ * @param properties - Event properties/metadata
+ */
+export function captureServerEvent(
+  event: string,
+  distinctId: string = "anonymous",
+  properties?: Record<string, unknown>
+) {
+  const client = getPostHogClient();
+  client.capture({
+    distinctId,
+    event,
+    properties,
+  });
+}
+
+/**
  * Check if preview is enabled for a specific user (with feature flag support)
  * Requires both: API key configured AND feature flag enabled for the user
  *

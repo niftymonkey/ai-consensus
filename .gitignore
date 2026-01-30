@@ -42,6 +42,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# workflow devkit local state
+.workflow-data/
+
 # typescript
 *.tsbuildinfo
 

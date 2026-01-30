@@ -36,7 +36,7 @@ describe("getModelInstance", () => {
     it("routes OpenAI model through OpenRouter", () => {
       const result = getModelInstance(openRouterKey, "openai", "openai/gpt-4o-mini");
 
-      expect(createOpenRouterProvider).toHaveBeenCalledWith(openRouterKey);
+      expect(createOpenRouterProvider).toHaveBeenCalledWith(openRouterKey, undefined);
       expect(createOpenAI).not.toHaveBeenCalled();
       expect(result).toEqual({ provider: "openrouter", modelId: "openai/gpt-4o-mini" });
     });
@@ -44,7 +44,7 @@ describe("getModelInstance", () => {
     it("routes Anthropic model through OpenRouter", () => {
       const result = getModelInstance(openRouterKey, "anthropic", "anthropic/claude-3.5-haiku");
 
-      expect(createOpenRouterProvider).toHaveBeenCalledWith(openRouterKey);
+      expect(createOpenRouterProvider).toHaveBeenCalledWith(openRouterKey, undefined);
       expect(createAnthropic).not.toHaveBeenCalled();
       expect(result).toEqual({ provider: "openrouter", modelId: "anthropic/claude-3.5-haiku" });
     });
@@ -52,7 +52,7 @@ describe("getModelInstance", () => {
     it("routes Google model through OpenRouter", () => {
       const result = getModelInstance(openRouterKey, "google", "google/gemini-2.0-flash-001");
 
-      expect(createOpenRouterProvider).toHaveBeenCalledWith(openRouterKey);
+      expect(createOpenRouterProvider).toHaveBeenCalledWith(openRouterKey, undefined);
       expect(createGoogleGenerativeAI).not.toHaveBeenCalled();
       expect(result).toEqual({ provider: "openrouter", modelId: "google/gemini-2.0-flash-001" });
     });
@@ -60,14 +60,14 @@ describe("getModelInstance", () => {
     it("routes non-direct provider models through OpenRouter", () => {
       const result = getModelInstance(openRouterKey, "meta-llama", "meta-llama/llama-3.1-8b-instruct");
 
-      expect(createOpenRouterProvider).toHaveBeenCalledWith(openRouterKey);
+      expect(createOpenRouterProvider).toHaveBeenCalledWith(openRouterKey, undefined);
       expect(result).toEqual({ provider: "openrouter", modelId: "meta-llama/llama-3.1-8b-instruct" });
     });
 
     it("converts direct format model ID to OpenRouter format", () => {
       const result = getModelInstance(openRouterKey, "openai", "gpt-4o-mini");
 
-      expect(createOpenRouterProvider).toHaveBeenCalledWith(openRouterKey);
+      expect(createOpenRouterProvider).toHaveBeenCalledWith(openRouterKey, undefined);
       expect(result).toEqual({ provider: "openrouter", modelId: "openai/gpt-4o-mini" });
     });
   });
@@ -142,14 +142,14 @@ describe("getModelInstance", () => {
     it("falls back to OpenRouter for non-direct providers", () => {
       const result = getModelInstance(someKey, "meta-llama", "meta-llama/llama-3.1-8b-instruct");
 
-      expect(createOpenRouterProvider).toHaveBeenCalledWith(someKey);
+      expect(createOpenRouterProvider).toHaveBeenCalledWith(someKey, undefined);
       expect(result).toEqual({ provider: "openrouter", modelId: "meta-llama/llama-3.1-8b-instruct" });
     });
 
     it("falls back to OpenRouter for mistral models", () => {
       const result = getModelInstance(someKey, "mistralai", "mistralai/mistral-small-24b-instruct-2501");
 
-      expect(createOpenRouterProvider).toHaveBeenCalledWith(someKey);
+      expect(createOpenRouterProvider).toHaveBeenCalledWith(someKey, undefined);
       expect(result).toEqual({ provider: "openrouter", modelId: "mistralai/mistral-small-24b-instruct-2501" });
     });
   });

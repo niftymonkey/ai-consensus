@@ -52,6 +52,15 @@ export interface ErrorData {
   round?: number;
 }
 
+export interface TimingData {
+  step: string;
+  elapsedMs: number;
+  elapsedSeconds: number;
+  remainingSeconds: number;
+  percentUsed: number;
+  warning?: string;
+}
+
 export interface FinalData {
   consensus: string;
   progressionSummary: string | null;
@@ -83,7 +92,8 @@ export type ConsensusEvent =
   | { type: "final-responses"; data: Record<string, string> }
   | { type: "complete" }
   | { type: "final"; data: FinalData }
-  | { type: "error"; data: ErrorData };
+  | { type: "error"; data: ErrorData }
+  | { type: "timing"; data: TimingData };
 
 /**
  * Helper to send a typed consensus event through a stream

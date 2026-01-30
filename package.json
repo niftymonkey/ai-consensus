@@ -58,6 +58,7 @@
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
+    "workflow": "4.0.1-beta.50",
     "zod": "^4.1.13"
   },
   "devDependencies": {
