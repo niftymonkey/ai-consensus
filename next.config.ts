@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withWorkflow } from "workflow/next";
 
 const nextConfig: NextConfig = {
   // Expose VERCEL_ENV to client for preview detection
@@ -79,4 +80,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withWorkflow(nextConfig);
